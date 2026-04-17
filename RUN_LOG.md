@@ -35,9 +35,14 @@ Ran `python examples/demos/train_gpu.py` using the CPU fallback.
 *   **Parameters:** 11,474 total (50 quantum)
 *   **Epochs:** 5 (168 batches per epoch)
 
-**Metrics (In Progress):**
-*   **Epoch 1:** Loss = 3.0459 (Speed: ~2482ms/step, ~417.1s total per epoch)
-*   *Note: Because it is running on the CPU instead of the raw GPU, it takes roughly 7 minutes per epoch (Total estimated time ~35 minutes).*
+**Metrics (Final):**
+*   **Epoch 1 Loss:** 3.0459 (Speed: ~2482ms/step, ~417.1s total)
+*   **Epoch 2 Loss:** 2.6801 (Speed: ~2449ms/step, ~411.4s total)
+*   **Epoch 3 Loss:** 2.0502 (Speed: ~2427ms/step, ~407.7s total)
+*   **Epoch 4 Loss:** 1.3416 (Speed: ~2468ms/step, ~414.6s total)
+*   **Epoch 5 Loss:** 0.8595 (Speed: ~2450ms/step, ~411.6s total)
+*   **Total Training Time:** 2062.3 seconds (~34.3 minutes)
+*   **Final Output Check:** Generated a small sequence demonstrating the quantum transformer generation logic (`To beeee to e  or d m p surerereee reeperee e`). *Note: Coherence is low because it is a tiny 11K-parameter character-level toy model trained for 35 minutes on a small snippet of Shakespeare.*
 
 ### 3. Test Suite Execution
 Ran `python -m pytest tests/ -v`.
