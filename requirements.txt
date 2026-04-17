@@ -1,0 +1,22 @@
+# Core Quantum Framework
+pennylane>=0.39.0
+pennylane-lightning>=0.39.0
+
+# Scientific Computing
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Configuration
+pyyaml>=6.0
+
+# Testing
+pytest>=7.4.0
+pytest-benchmark>=4.0.0
+
+# Optional: GPU acceleration
+# pennylane-lightning-gpu
+
+# Optional: PyTorch integration (if available)
+# torch>=2.0.0
+# transformers>=4.35.0
+# langchain>=0.1.0

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantum-llm-agent"
+version = "0.1.0"
+description = "World's First Quantum-Simulated LLM with Agentic Workflows"
+requires-python = ">=3.10"
+license = {text = "Proprietary - All Rights Reserved"}
+dependencies = [
+    "pennylane>=0.39.0",
+    "pennylane-lightning>=0.39.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4.0", "pytest-benchmark>=4.0.0"]
+dev = ["pytest>=7.4.0", "pytest-benchmark>=4.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.setuptools.packages.find]
+include = ["quantum*", "classical*", "hybrid*", "agents*", "config*"]

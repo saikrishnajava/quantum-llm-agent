@@ -1,0 +1,26 @@
+# Training Hyperparameters for Hybrid Quantum-Classical LLM
+
+default:
+  # Optimization
+  learning_rate: 1.0e-4
+  quantum_lr_scale: 0.1        # Quantum params use lr * this factor
+  weight_decay: 0.01
+  quantum_weight_decay: 0.001
+  max_grad_norm: 1.0
+  warmup_steps: 500
+
+  # Training schedule
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  max_epochs: 50
+  eval_every_steps: 200
+  save_every_steps: 1000
+
+  # Quantum-specific
+  parameter_shift_shots: null   # null = analytic, int = finite-shot
+  quantum_batch_limit: 16       # Max tokens processed quantumly per step
+  classical_fallback: true      # Fall back to classical on quantum errors
+
+  # Logging
+  log_quantum_stats: true
+  log_every_steps: 50

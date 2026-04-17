@@ -1,0 +1,29 @@
+# Quantum Backend Configuration
+# Defines available quantum devices and their capabilities
+
+backends:
+  # Default CPU-based statevector simulator
+  default_qubit:
+    device: "default.qubit"
+    description: "PennyLane default statevector simulator"
+    max_qubits: 23          # Limited by available RAM
+    supports_gradients: true
+    diff_method: "backprop"
+
+  # High-performance C++ simulator
+  lightning_qubit:
+    device: "lightning.qubit"
+    description: "PennyLane Lightning C++ simulator"
+    max_qubits: 25
+    supports_gradients: true
+    diff_method: "adjoint"
+
+# Active backend selection
+active_backend: "default_qubit"
+
+# Resource constraints
+resource_limits:
+  max_qubits: 20               # Conservative limit for development
+  max_circuit_depth: 100        # Gate depth limit for error control
+  max_quantum_memory_gb: 8      # RAM allocated for quantum state vectors
+  circuit_cache_size: 500       # Number of compiled circuits to cache
