@@ -16,6 +16,10 @@ import pennylane as qml
 import pennylane.numpy as pnp
 
 from classical.nn import Module, Parameter
+from quantum.simulator import (
+    apply_gate, apply_cnot, amplitude_embed,
+    pauli_z_expval, pauli_y_expval, _ry, _rz, _rx,
+)
 
 
 def _pad_to_dim(vec, target_dim):
@@ -72,8 +76,17 @@ class QuantumFeatureMapCircuit(Module):
         outputs = []
         for vec in flat:
             padded = _pad_to_dim(vec, self.state_dim)
-            result = self._circuit(padded, self.params)
-            outputs.append(anp.array(result))
+            state = amplitude_embed(padded, self.n_qubits)
+            idx = 0
+            for _ in range(self.n_layers):
+                for i in range(self.n_qubits):
+                    state = apply_gate(state, _ry(self.params[idx]), i, self.n_qubits)
+                    state = apply_gate(state, _rz(self.params[idx + 1]), i, self.n_qubits)
+                    idx += 2
+                for i in range(self.n_qubits - 1):
+                    state = apply_cnot(state, i, i + 1, self.n_qubits)
+            outputs.append(anp.array([pauli_z_expval(state, i, self.n_qubits)
+                                       for i in range(self.n_qubits)]))
         return anp.stack(outputs).reshape(*original_shape, self.n_qubits)
 
 
@@ -120,8 +133,19 @@ class QuantumPositionalCircuit(Module):
             seq_out = []
             for s in range(seq_len):
                 bits = self._position_to_bits(int(positions[b, s]))
-                result = self._circuit(bits, self.params)
-                seq_out.append(anp.array(result))
+                state = anp.zeros(2 ** self.n_qubits, dtype=complex)
+                state = state.at[0].set(1.0) if hasattr(state, 'at') else anp.array(
+                    [1.0] + [0.0] * (2 ** self.n_qubits - 1), dtype=complex
+                )
+                for i in range(self.n_qubits):
+                    state = apply_gate(state, _rx(np.pi * bits[i]), i, self.n_qubits)
+                for i in range(self.n_qubits):
+                    state = apply_gate(state, _ry(self.params[i]), i, self.n_qubits)
+                    state = apply_gate(state, _rz(self.params[i + self.n_qubits]), i, self.n_qubits)
+                for i in range(self.n_qubits - 1):
+                    state = apply_cnot(state, i, i + 1, self.n_qubits)
+                seq_out.append(anp.array([pauli_y_expval(state, i, self.n_qubits)
+                                           for i in range(self.n_qubits)]))
             outputs.append(anp.stack(seq_out))
         return anp.stack(outputs)
 
@@ -181,10 +205,36 @@ class QuantumAttentionCircuit(Module):
 
     def forward(self, q, k, v):
         dim = self.register_dim
+        qpr = self.qubits_per_register
+        n = self.n_qubits
         q_padded = _pad_to_dim(q, dim)
         k_padded = _pad_to_dim(k, dim)
         v_padded = _pad_to_dim(v, dim)
-        return anp.array(self._circuit(q_padded, k_padded, v_padded, self.params))
+
+        sq = amplitude_embed(q_padded, qpr)
+        sk = amplitude_embed(k_padded, qpr)
+        sv = amplitude_embed(v_padded, qpr)
+        state = anp.kron(anp.kron(sq, sk), sv)
+
+        q_wires = list(range(0, qpr))
+        k_wires = list(range(qpr, 2 * qpr))
+        v_wires = list(range(2 * qpr, 3 * qpr))
+
+        idx = 0
+        for i in range(qpr):
+            state = apply_cnot(state, q_wires[i], k_wires[i], n)
+            state = apply_gate(state, _ry(self.params[idx]), k_wires[i], n)
+            idx += 1
+
+        for _ in range(self.n_layers):
+            for i in range(n):
+                state = apply_gate(state, _ry(self.params[idx]), i, n)
+                state = apply_gate(state, _rz(self.params[idx + 1]), i, n)
+                idx += 2
+            for i in range(n - 1):
+                state = apply_cnot(state, i, i + 1, n)
+
+        return anp.array([pauli_z_expval(state, w, n) for w in v_wires])
 
 
 # ------------------------------------------------------------------
@@ -223,4 +273,14 @@ class QuantumActivationCircuit(Module):
 
     def forward(self, features):
         padded = _pad_to_dim(features, self.state_dim)
-        return anp.array(self._circuit(padded, self.params))
+        state = amplitude_embed(padded, self.n_qubits)
+        idx = 0
+        for _ in range(self.n_layers):
+            for i in range(self.n_qubits):
+                state = apply_gate(state, _ry(self.params[idx]), i, self.n_qubits)
+                state = apply_gate(state, _rz(self.params[idx + 1]), i, self.n_qubits)
+                idx += 2
+            for i in range(self.n_qubits):
+                state = apply_cnot(state, i, (i + 1) % self.n_qubits, self.n_qubits)
+        return anp.array([pauli_z_expval(state, i, self.n_qubits)
+                           for i in range(self.n_qubits)])
