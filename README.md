@@ -66,7 +66,7 @@ Input Text
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_USERNAME/quantum-llm-agent.git
+git clone https://github.com/saikrishnajava/quantum-llm-agent.git
 cd quantum-llm-agent
 
 # Setup
@@ -177,7 +177,7 @@ If you use this work in your research, please cite:
   author = {Garikipati, Saikrishna},
   title = {Quantum-Simulated LLM with Agentic Workflows},
   year = {2026},
-  url = {https://github.com/YOUR_USERNAME/quantum-llm-agent}
+  url = {https://github.com/saikrishnajava/quantum-llm-agent}
 }
 ```
 
