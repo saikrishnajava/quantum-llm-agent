@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pennylane as qml
 
-warnings.filterwarnings("ignore", category=ComplexWarning)
+# warnings.filterwarnings("ignore", category=np.ComplexWarning)
 
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
