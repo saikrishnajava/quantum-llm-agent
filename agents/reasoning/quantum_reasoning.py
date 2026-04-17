@@ -13,6 +13,10 @@ import pennylane as qml
 import pennylane.numpy as pnp
 
 from classical.nn import Module, Linear, Parameter
+from quantum.simulator import (
+    apply_gate, apply_cnot, amplitude_embed,
+    pauli_z_expval, probability, _ry, _rz,
+)
 
 
 class QuantumDecisionCircuit(Module):
@@ -54,6 +58,10 @@ class QuantumDecisionCircuit(Module):
 
     def forward(self, context: np.ndarray, options: np.ndarray) -> np.ndarray:
         dim = self.reg_dim
+        n = self.n_qubits
+        rq = self.reg_qubits
+        ctx_wires = list(range(rq))
+        opt_wires = list(range(rq, n))
 
         def _pad(vec, target_dim):
             vec_slice = vec[:target_dim]
@@ -64,7 +72,25 @@ class QuantumDecisionCircuit(Module):
 
         ctx = _pad(context, dim)
         opt = _pad(options, dim)
-        return anp.array(self._circuit(ctx, opt, self.params))
+
+        s_ctx = amplitude_embed(ctx, rq)
+        s_opt = amplitude_embed(opt, rq)
+        state = anp.kron(s_ctx, s_opt)
+
+        idx = 0
+        for i in range(rq):
+            state = apply_cnot(state, ctx_wires[i], opt_wires[i], n)
+            state = apply_gate(state, _ry(self.params[idx]), opt_wires[i], n)
+            idx += 1
+        for _ in range(self.n_layers):
+            for i in range(n):
+                state = apply_gate(state, _ry(self.params[idx]), i, n)
+                state = apply_gate(state, _rz(self.params[idx + 1]), i, n)
+                idx += 2
+            for i in range(n - 1):
+                state = apply_cnot(state, i, i + 1, n)
+
+        return probability(state, opt_wires, n)
 
 
 class QuantumPatternMatcher(Module):
@@ -100,6 +126,10 @@ class QuantumPatternMatcher(Module):
 
     def forward(self, input_pattern: np.ndarray, memory_pattern: np.ndarray) -> np.ndarray:
         dim = self.reg_dim
+        n = self.n_qubits
+        rq = self.reg_qubits
+        in_wires = list(range(rq))
+        mem_wires = list(range(rq, n))
 
         def _pad(vec, target_dim):
             vec_slice = vec[:target_dim]
@@ -110,7 +140,20 @@ class QuantumPatternMatcher(Module):
 
         inp = _pad(input_pattern, dim)
         mem = _pad(memory_pattern, dim)
-        return anp.array(self._circuit(inp, mem, self.params))
+
+        s_in = amplitude_embed(inp, rq)
+        s_mem = amplitude_embed(mem, rq)
+        state = anp.kron(s_in, s_mem)
+
+        idx = 0
+        for i in range(n):
+            state = apply_gate(state, _ry(self.params[idx]), i, n)
+            state = apply_gate(state, _rz(self.params[idx + 1]), i, n)
+            idx += 2
+        for i in range(rq):
+            state = apply_cnot(state, in_wires[i], mem_wires[i], n)
+
+        return anp.array([pauli_z_expval(state, w, n) for w in mem_wires])
 
 
 class QuantumReasoningModule(Module):
