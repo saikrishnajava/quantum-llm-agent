@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-warnings.filterwarnings("ignore", category=ComplexWarning)
+warnings.filterwarnings("ignore", message=".*complex.*")
 
 from classical.nn import CrossEntropyLoss, Softmax
 from classical.tokenizer import CharTokenizer

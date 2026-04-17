@@ -156,8 +156,9 @@ quantum-llm-agent/
 - PyYAML >= 6.0
 
 Optional for GPU acceleration:
-- NVIDIA GPU with CUDA
+- NVIDIA GPU with CUDA (compute capability 7.0+ / Volta or newer)
 - `pennylane-lightning[gpu]`
+- Note: Pascal GPUs (P2200, GTX 1080, etc.) are not supported by lightning.gpu — they fall back to lightning.qubit (C++ CPU) automatically
 
 ## GPU Setup (NVIDIA)
 
