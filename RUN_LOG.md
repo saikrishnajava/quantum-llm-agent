@@ -58,3 +58,28 @@ Ran `python examples/demos/poc_12qubit.py`.
     *   Quantum reasoning module decision: 14.3 ms
     *   Quantum agent loop (2 steps): 7059.3 ms
 *   **Architecture Verified:** Total params: 130,004. Total qubits: ~12. Verified that all components (Quantum attention, Quantum embedding, Quantum reasoning, Quantum memory) successfully communicate and process the agent loop.
+
+---
+
+## Run 2: Google Colab (Tesla T4 GPU)
+**Date:** April 17, 2026
+**Environment:** Google Colab, Tesla T4 GPU (15360 MiB)
+**Setup:** `pennylane` v0.44.1, Backend: `lightning.gpu`, Diff method: adjoint
+
+### 1. Test Suite Execution
+*   **Result:** 51 passed, 1 warning (ComplexWarning).
+*   **Time:** 4.49s (Slower than the 2.84s on the local Linux CPU).
+
+### 2. Quick Benchmark (10 steps)
+A quick 10-step benchmark was performed to compare raw throughput across machines:
+*   **Colab T4 (GPU):** 4362 ms/step
+*   **Linux CPU (C++ adjoint):** 2450 ms/step
+*   **MacBook CPU:** 3534 ms/step
+
+**Conclusion:** For this specific scale of quantum simulation (11k classical params, 50 quantum params), the Colab Tesla T4 GPU is **slower** than both the Linux CPU (~0.6x speed) and the MacBook CPU (~0.8x speed). This is a known phenomenon in quantum simulation where GPU memory transfer overhead outweighs the parallelization benefits for very small qubit counts and parameter sets.
+
+### 3. Training Execution (In Progress)
+*   **Model:** Standard Model (d=32, 1 quantum head)
+*   **Parameters:** 11,474 params (50 quantum)
+*   **Dataset:** 168 batches/epoch
+*   **Status:** Currently training for 10 epochs.
