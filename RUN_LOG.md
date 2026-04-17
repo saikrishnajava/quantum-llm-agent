@@ -5,7 +5,7 @@ This document tracks execution environments, bugs encountered, and performance m
 ## Run 1: Ubuntu Linux (NVIDIA GPU Setup)
 **Date:** April 17, 2026
 **Environment:** Ubuntu Linux, Python 3.12, CUDA 12
-**Goal:** Run `setup_gpu.sh` and execute `examples/demos/train_gpu.py`.
+**Goal:** Run `setup_gpu.sh`, execute `examples/demos/train_gpu.py`, run tests, and run 12-qubit PoC.
 
 ### 1. Setup & Environment Issues Encountered
 During the execution of `setup_gpu.sh`, the following package versions were resolved:
@@ -38,3 +38,18 @@ Ran `python examples/demos/train_gpu.py` using the CPU fallback.
 **Metrics (In Progress):**
 *   **Epoch 1:** Loss = 3.0459 (Speed: ~2482ms/step, ~417.1s total per epoch)
 *   *Note: Because it is running on the CPU instead of the raw GPU, it takes roughly 7 minutes per epoch (Total estimated time ~35 minutes).*
+
+### 3. Test Suite Execution
+Ran `python -m pytest tests/ -v`.
+*   **Result:** 51 passed (in ~2.84s).
+*   **Details:** All unit tests, integration tests, quantum gradient flow tests, and memory tests successfully passed using the C++ adjoint simulation via `lightning.qubit`.
+
+### 4. Proof-of-Concept Execution
+Ran `python examples/demos/poc_12qubit.py`.
+*   **Result:** Successfully ran the 12-qubit proof of concept logic end-to-end.
+*   **Metrics:** 
+    *   Forward pass (quantum attention + quantum embedding): 217.1 ms
+    *   Auto-regressive generation (12 tokens): 638.1 ms
+    *   Quantum reasoning module decision: 14.3 ms
+    *   Quantum agent loop (2 steps): 7059.3 ms
+*   **Architecture Verified:** Total params: 130,004. Total qubits: ~12. Verified that all components (Quantum attention, Quantum embedding, Quantum reasoning, Quantum memory) successfully communicate and process the agent loop.
