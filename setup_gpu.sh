@@ -55,7 +55,7 @@ import pennylane as qml
 print(f'PennyLane: {qml.__version__}')
 
 # Check available devices
-devs = qml.plugin_devices()
+devs = qml.plugin_devices
 print(f'Available devices: {list(devs.keys())}')
 
 # Test lightning.qubit
