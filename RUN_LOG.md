@@ -125,3 +125,26 @@ Following performance optimizations, the training was re-run on the Linux CPU, d
 *   **Final Output Check:** Generated a small sequence: `To beeee inannnn nnnnn nnnndind nde enddeyd n`
 
 **Conclusion:** The performance bottlenecks were successfully resolved! The step time dropped from ~2450ms (Run 1) down to **~1050ms**, more than halving the total training time from 34.3 minutes down to just 15 minutes.
+
+---
+
+## Run 4: Ubuntu Linux (Adaptive Qubit MoE)
+**Date:** April 17, 2026
+**Environment:** Ubuntu Linux, Python 3.12, `lightning.qubit` (C++ adjoint)
+
+### 1. Training Execution
+An Adaptive Qubit Mixture of Experts (MoE) model was trained on the local Linux CPU.
+
+**Metrics (Final):**
+*   **Model:** Adaptive Qubit MoE (experts: 6-qubit, 9-qubit, 12-qubit)
+*   **Parameters:** 11,664 params (117 quantum)
+*   **Dataset:** 337 batches/epoch
+*   **Epoch 1 Loss:** 2.9629 (Speed: ~3276ms/step, ~1104.0s total)
+*   **Epoch 2 Loss:** 2.2387 (Speed: ~3135ms/step, ~1056.5s total)
+*   **Epoch 3 Loss:** 1.2594 (Speed: ~3172ms/step, ~1068.9s total)
+*   **Epoch 4 Loss:** 0.7357 (Speed: ~3469ms/step, ~1168.9s total)
+*   **Epoch 5 Loss:** 0.5389 (Speed: ~3423ms/step, ~1153.7s total)
+*   **Total Training Time:** 5551.9 seconds (~92.5 minutes)
+*   **Final Output Check:** Prompt: 'To be' → Output: 'To beeee oubun buruooo o ooooohooo oaoooooBoo'
+
+**Conclusion:** The MoE architecture successfully trains and converges rapidly (loss dropping from 2.96 to 0.53). The step time is higher (~3300ms/step) compared to the standard performance-tuned model (~1050ms/step) because the MoE router dynamically routes tokens and executes larger quantum circuits (up to 12 qubits) on the fly.
