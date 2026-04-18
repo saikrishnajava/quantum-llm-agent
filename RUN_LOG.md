@@ -100,11 +100,11 @@ A quick 10-step benchmark was performed to compare raw throughput across machine
     *   `"Now is" -> "Now isssthofthoTwSCCTocogoooooooooo dooooooooooooooooooooooooooooo"`
     *   `"A horse" -> "A horsee angsTCbgCiCTCTosgooTooonoToooooooOoooooooooooooooooOoooooo"`
 
-### 4. Bigger Model Execution (In Progress)
+### 4. Bigger Model Execution (Aborted / Half-Baked)
 *   **Model:** Bigger Model (d=64, 2 layers, 2 qheads, quantum embed)
 *   **Parameters:** 104,724 params (180 quantum)
 *   **Dataset:** 335 batches/epoch
-*   **Status:** Currently training for 10 epochs.
+*   **Status:** Run was aborted / incomplete before training epochs could finish.
 
 ---
 
