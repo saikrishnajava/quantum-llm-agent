@@ -50,7 +50,8 @@ Input Text
 │  ├── LayerNorm                      │
 │  ├── Quantum Multi-Head Attention   │
 │  │   ├── Classical heads (3)        │
-│  │   └── Quantum head (1, 6 qub)   │
+│  │   └── MoE Quantum head           │
+│  │       └── Router → 6/9/12 qubits │
 │  ├── LayerNorm                      │
 │  └── Hybrid Feed-Forward            │
 │      └── GELU / Quantum Activation  │
@@ -79,6 +80,9 @@ python examples/demos/poc_12qubit.py
 # Run training on Shakespeare
 python examples/demos/train_gpu.py
 
+# Run MoE training (adaptive qubit routing)
+python examples/demos/train_moe.py
+
 # Run tests
 python -m pytest tests/ -v
 ```
@@ -101,13 +105,13 @@ result = trainer.training_step(input_ids, labels)
 print(f"loss={result['loss']:.4f}, grad_norm={result['grad_norm']:.4f}")
 ```
 
-Training speed depends on backend:
+Training speed depends on backend and model:
 
-| Backend | Hardware | Speed | Command |
-|---------|----------|-------|---------|
-| `default.qubit` + backprop | CPU | ~800ms/step | Default |
+| Backend | Hardware | Speed | Notes |
+|---------|----------|-------|-------|
+| Fast numpy simulator | Any CPU | ~100ms/step | Default for ≤12 qubits, 14x faster than PennyLane |
 | `lightning.qubit` + adjoint | CPU (C++) | ~200ms/step | Install `pennylane-lightning` |
-| `lightning.gpu` + adjoint | NVIDIA GPU | ~50ms/step | Install `pennylane-lightning[gpu]` |
+| `lightning.gpu` + adjoint | NVIDIA GPU (Volta+) | ~50ms/step | Install `pennylane-lightning[gpu]` |
 
 ## Project Structure
 
@@ -115,6 +119,8 @@ Training speed depends on backend:
 quantum-llm-agent/
 ├── quantum/              # Quantum circuit components
 │   ├── circuits/core.py  #   Feature map, attention, activation, positional circuits
+│   ├── simulator/        #   Fast numpy statevector simulator (autograd-compatible)
+│   ├── moe/              #   Adaptive qubit router + mixture-of-experts
 │   ├── encodings/        #   Amplitude, angle, basis, variational encoders
 │   ├── gates/layers.py   #   Reusable gate patterns
 │   └── backends/         #   Device management + resource tracking
@@ -124,7 +130,7 @@ quantum-llm-agent/
 │   ├── data.py           #   Dataset + DataLoader
 │   └── optimizers/       #   Hybrid quantum-classical trainer
 ├── hybrid/               # Quantum-classical integration
-│   ├── attention/        #   Quantum multi-head attention
+│   ├── attention/        #   Quantum multi-head attention + MoE attention
 │   ├── embeddings/       #   Hybrid embedding layer
 │   ├── feedforward/      #   Hybrid FFN with quantum activation
 │   └── interfaces/       #   Full model, caching, profiling
@@ -132,7 +138,7 @@ quantum-llm-agent/
 │   ├── reasoning/        #   Quantum decision + pattern matching
 │   ├── memory/           #   Quantum associative memory
 │   └── coordination/     #   Agent loop + multi-agent coordinator
-├── tests/                # 50 tests (unit, integration, gradient flow, benchmarks)
+├── tests/                # 55 tests (unit, integration, gradient flow, MoE, benchmarks)
 ├── config/               # YAML configs for backends, models, training
 └── examples/demos/       # Runnable demos
 ```
