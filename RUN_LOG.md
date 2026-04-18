@@ -174,4 +174,5 @@ A comparative experiment (`experiment_parity.py`) was executed to evaluate the p
 
 **3. Adaptive MoE (6/9/12 qubit router):**
 *   **Parameters:** 2,532 (117 quantum)
-*   **Status (In Progress):** Currently running. Epoch 1 completed in 655.7s with an initial loss of `0.7056`. The dynamic routing overhead significantly increases epoch duration. Testing is ongoing to see if the MoE routing can achieve even higher parity-detection accuracy.
+*   **Execution Time:** Extremely slow (~720s per epoch).
+*   **Result (Final):** By Epoch 20, loss dropped to `0.1349`. Accuracy hit 54.0% train / 50.0% test. While the MoE successfully learned to route, it did not significantly surpass the fixed 6-qubit quantum head for this specific parity task, and the dynamic routing added massive computational overhead (taking ~14,411s total).
