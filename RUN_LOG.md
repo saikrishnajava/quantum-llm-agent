@@ -78,10 +78,32 @@ A quick 10-step benchmark was performed to compare raw throughput across machine
 
 **Conclusion:** For this specific scale of quantum simulation (11k classical params, 50 quantum params), the Colab Tesla T4 GPU is **slower** than both the Linux CPU (~0.6x speed) and the MacBook CPU (~0.8x speed). This is a known phenomenon in quantum simulation where GPU memory transfer overhead outweighs the parallelization benefits for very small qubit counts and parameter sets.
 
-### 3. Training Execution (In Progress)
-*   **Model:** Standard Model (d=32, 1 quantum head)
+### 3. Training Execution
+*   **Model:** Standard Model (d=32, 1 quantum head, 10 epochs)
 *   **Parameters:** 11,474 params (50 quantum)
 *   **Dataset:** 168 batches/epoch
+*   **Metrics:**
+    *   Epoch  1: loss=3.0778 (4037ms/step, 678.3s)
+    *   Epoch  2: loss=2.7044 (3903ms/step, 655.7s)
+    *   Epoch  3: loss=2.3170 (3957ms/step, 664.7s)
+    *   Epoch  4: loss=1.5211 (3901ms/step, 655.4s)
+    *   Epoch  5: loss=0.9570 (3886ms/step, 652.9s)
+    *   Epoch  6: loss=0.7008 (3943ms/step, 662.4s)
+    *   Epoch  7: loss=0.5579 (3999ms/step, 671.8s)
+    *   Epoch  8: loss=0.4939 (3923ms/step, 659.1s)
+    *   Epoch  9: loss=0.4557 (3836ms/step, 644.5s)
+    *   Epoch 10: loss=0.4220 (3906ms/step, 656.2s)
+*   **Result:** Done in 6600.9s (110.0 min) | Loss: 3.0778 -> 0.4220
+*   **Generation Output:**
+    *   `"To be" -> "To beeeepe t toTCTegoTosgodoToooCooooooooooooooqFoooooooooooooooo"`
+    *   `"The fault" -> "The faulthetk\nThTOgngTcoCoCoCoTooCoooTooToooooooooooo\noooooooooooooo"`
+    *   `"Now is" -> "Now isssthofthoTwSCCTocogoooooooooo dooooooooooooooooooooooooooooo"`
+    *   `"A horse" -> "A horsee angsTCbgCiCTCTosgooTooonoToooooooOoooooooooooooooooOoooooo"`
+
+### 4. Bigger Model Execution (In Progress)
+*   **Model:** Bigger Model (d=64, 2 layers, 2 qheads, quantum embed)
+*   **Parameters:** 104,724 params (180 quantum)
+*   **Dataset:** 335 batches/epoch
 *   **Status:** Currently training for 10 epochs.
 
 ---
