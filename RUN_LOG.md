@@ -163,16 +163,14 @@ A comparative experiment (`experiment_parity.py`) was executed to evaluate the p
 *   **Class Balance:** Recorded at 0.48 (near the ideal ~0.50).
 
 **1. Classical Baseline (0 quantum heads):**
-*   **Parameters:** 2,352 
-*   **Execution Time:** Extremely fast (~0.3-0.4s per epoch).
-*   **Result (Final):** By Epoch 20, loss plateaued at `0.1339`. Accuracy struggled to break past ~54.5% test / 52.0% train (effectively random guessing, proving the classical limitation).
+*   **Parameters:** 2,352 (0 quantum)
+*   **Execution Time:** Extremely fast (~0.3-0.6s per epoch).
+*   **Result (Final):** By Epoch 20, loss plateaued at `0.1329`. Accuracy struggled to break past ~44.0% test / 45.0% train (effectively random guessing, proving the classical limitation).
 
 **2. Standard Quantum (1 fixed 6-qubit head):**
-*   **Parameters:** 2,390 (38 quantum)
-*   **Execution Time:** ~108s per epoch.
-*   **Result (Final):** Loss successfully dropped lower than the classical baseline (hitting `0.1179` by Epoch 19). Train accuracy achieved 59.0%, demonstrating the quantum entanglement advantage for this XOR task.
+*   **Parameters:** 2,376 (24 quantum)
+*   **Execution Time:** ~91s per epoch.
+*   **Result (Final):** Loss successfully dropped lower than the classical baseline (hitting `0.1193` by Epoch 20). Train accuracy achieved 58.0%, demonstrating the quantum entanglement advantage for this XOR task.
 
 **3. Adaptive MoE (6/9/12 qubit router):**
-*   **Parameters:** 2,532 (117 quantum)
-*   **Execution Time:** Extremely slow (~720s per epoch).
-*   **Result (Final):** By Epoch 20, loss dropped to `0.1349`. Accuracy hit 54.0% train / 50.0% test. While the MoE successfully learned to route, it did not significantly surpass the fixed 6-qubit quantum head for this specific parity task, and the dynamic routing added massive computational overhead (taking ~14,411s total).
+*   **Status (In Progress):** Currently running...
