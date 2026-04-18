@@ -6,17 +6,30 @@ Single script that runs ALL benchmarks in optimal order and produces
 a comprehensive results file.
 
 Phases:
-  1. Classical baselines (all tasks, all seeds) — fast, ~1-2 hours
-  2. Quantum quick probe (all tasks, seed=42 only) — ~6-8 hours
-  3. Full quantum sweep (promising tasks, all 5 seeds) — ~2-3 days
+  1. Classical baselines (all tasks, all seeds) — fast
+  2. Quantum quick probe (all tasks, seed=42 only)
+  3. Full quantum sweep (promising tasks, all 5 seeds)
   4. Generate final report
 
 Usage:
-    python benchmarks/run_benchmarks.py                # full run (all phases)
+    python benchmarks/run_benchmarks.py                # full run, sequential
+    python benchmarks/run_benchmarks.py --parallel     # use all CPU cores (~10x faster)
+    python benchmarks/run_benchmarks.py --parallel 8   # use 8 cores
     python benchmarks/run_benchmarks.py --phase 1      # classical baselines only
     python benchmarks/run_benchmarks.py --phase 2      # quantum probe only
     python benchmarks/run_benchmarks.py --phase 3      # full sweep on promising tasks
     python benchmarks/run_benchmarks.py --report       # generate report from existing results
+
+Parallel mode:
+    With --parallel, each (task, seed) pair runs as an independent process.
+    Sets OMP_NUM_THREADS=1 and MKL_NUM_THREADS=1 per worker to prevent
+    thread over-subscription. Safe for quantum simulation (no shared state).
+
+    Estimated times with 12 cores:
+      Phase 1: ~5-10 min    (was ~1 hour sequential)
+      Phase 2: ~45-60 min   (was ~8 hours sequential)
+      Phase 3: ~2-3 hours   (was ~15-20 hours sequential)
+      Total:   ~3-4 hours   (was ~24-30 hours sequential)
 
 Output:
     benchmarks/results/benchmark_results.json   — full structured results
@@ -28,6 +41,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import multiprocessing as mp
+import os
 import sys
 import time
 import traceback
@@ -232,7 +247,528 @@ CIRCUIT_LEVEL_TASKS = [
 
 
 # ======================================================================
-# Phase 1: Classical Baselines
+# Parallel Execution Infrastructure
+# ======================================================================
+
+def _worker_init():
+    """Initialize worker process: pin to 1 thread to avoid over-subscription."""
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+    warnings.filterwarnings("ignore")
+
+
+def _run_model_level_job(job: dict) -> dict:
+    """Worker function: train one (task, model, seed) and return result."""
+    _worker_init()
+    import numpy as np
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from benchmarks.runner import TaskConfig, build_model, train_and_evaluate
+
+    task_name = job["task_name"]
+    model_name = job["model_name"]
+    seed = job["seed"]
+    gen_name = job["generator_name"]
+    gen_params = job["generator_params"]
+    vocab_size = job["vocab_size"]
+
+    np.random.seed(seed)
+
+    generator = _get_generator(gen_name)
+    X_tr, y_tr, X_te, y_te = generator(seed=seed, **gen_params)
+
+    config = TaskConfig(
+        task_name=task_name, vocab_size=vocab_size,
+        d_model=16, n_layers=1, n_heads=4, d_ff=32,
+        max_seq_length=16, batch_size=16, learning_rate=5e-3,
+        epochs=20, eval_every=5,
+    )
+    model = build_model(config, model_name)
+    result = train_and_evaluate(model, X_tr, y_tr, X_te, y_te, config)
+    result["seed"] = seed
+
+    return {
+        "task_name": task_name,
+        "model_name": model_name,
+        "seed": seed,
+        "result": result,
+    }
+
+
+def _run_circuit_level_job(job: dict) -> dict:
+    """Worker function: train one circuit-level (task, model, seed)."""
+    _worker_init()
+    import numpy as np
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from benchmarks.tasks.benchmark_decision import (
+        generate_decision_task, ClassicalDecisionMLP, train_circuit_model,
+    )
+    from benchmarks.tasks.benchmark_pattern import (
+        generate_quantum_separable_patterns, ClassicalPatternMatcher, train_pattern_model,
+    )
+    from agents.reasoning.quantum_reasoning import QuantumDecisionCircuit, QuantumPatternMatcher
+
+    task_name = job["task_name"]
+    model_name = job["model_name"]
+    seed = job["seed"]
+    sp = job["params"]
+    is_quantum = (model_name == "quantum")
+
+    np.random.seed(seed)
+
+    if "decision" in task_name:
+        X_tr, y_tr, X_te, y_te = generate_decision_task(seed=seed, **sp)
+        context_dim = sp["context_dim"]
+        n_options = sp["n_options"]
+        if is_quantum:
+            model = QuantumDecisionCircuit(n_qubits=6, n_layers=2)
+        else:
+            model = ClassicalDecisionMLP(context_dim, n_options, hidden_dim=16)
+        result = train_circuit_model(
+            model, X_tr, y_tr, X_te, y_te,
+            context_dim, n_options, epochs=20, lr=0.01, is_quantum=is_quantum,
+        )
+    else:  # pattern
+        X_tr, y_tr, X_te, y_te = generate_quantum_separable_patterns(seed=seed, **sp)
+        pattern_dim = sp["pattern_dim"]
+        n_templates = sp["n_templates"]
+        rng = np.random.RandomState(seed)
+        base = rng.randn(pattern_dim)
+        base = base / np.linalg.norm(base)
+        templates = np.array([
+            base * np.array([(-1.0)**((t >> i) & 1) for i in range(pattern_dim)])
+            for t in range(n_templates)
+        ])
+        if is_quantum:
+            model = QuantumPatternMatcher(n_qubits=6, n_layers=1)
+        else:
+            model = ClassicalPatternMatcher(pattern_dim, n_templates, hidden_dim=12)
+        result = train_pattern_model(
+            model, templates, X_tr, y_tr, X_te, y_te,
+            epochs=20, lr=0.01, is_quantum=is_quantum,
+        )
+
+    result["seed"] = seed
+    return {
+        "task_name": task_name,
+        "model_name": model_name,
+        "seed": seed,
+        "result": result,
+    }
+
+
+def _get_generator(name: str):
+    """Get data generator function by name (for pickling across processes)."""
+    from benchmarks.tasks.benchmark_k_parity import generate_k_parity
+    from benchmarks.tasks.benchmark_correlated_features import generate_correlated_features
+    from benchmarks.tasks.benchmark_boolean import generate_xor_sat, generate_cnf
+    from benchmarks.tasks.benchmark_sequence_decision import (
+        generate_xor_sequence_decision, generate_equality_sequence_decision,
+    )
+    return {
+        "generate_k_parity": generate_k_parity,
+        "generate_correlated_features": generate_correlated_features,
+        "generate_xor_sat": generate_xor_sat,
+        "generate_cnf": generate_cnf,
+        "generate_xor_sequence_decision": generate_xor_sequence_decision,
+        "generate_equality_sequence_decision": generate_equality_sequence_decision,
+    }[name]
+
+
+# Generator name lookup for MODEL_LEVEL_TASKS
+_GENERATOR_NAMES = {
+    id(generate_k_parity): "generate_k_parity",
+    id(generate_correlated_features): "generate_correlated_features",
+    id(generate_xor_sat): "generate_xor_sat",
+    id(generate_cnf): "generate_cnf",
+    id(generate_xor_sequence_decision): "generate_xor_sequence_decision",
+    id(generate_equality_sequence_decision): "generate_equality_sequence_decision",
+}
+
+
+def run_parallel(results: dict, n_workers: int, phase: int | None = None) -> dict:
+    """Run benchmarks in parallel using multiprocessing."""
+    logger.info(f"PARALLEL MODE: {n_workers} workers")
+    logger.info("Each worker uses 1 thread (OMP/MKL/OpenBLAS pinned)")
+    logger.info("")
+
+    t_total = time.perf_counter()
+
+    # Phase 1: Classical baselines (all tasks, all seeds)
+    if phase is None or phase == 1:
+        results = _parallel_phase1(results, n_workers)
+
+    # Phase 2: Quantum probe (all tasks, seed=42)
+    if phase is None or phase == 2:
+        if "phase1_classical" not in results:
+            logger.error("Phase 1 must complete first.")
+            return results
+        results = _parallel_phase2(results, n_workers)
+
+    # Phase 3: Full sweep (promising tasks, all seeds)
+    if phase is None or phase == 3:
+        if "phase2_quantum_probe" not in results:
+            logger.error("Phase 2 must complete first.")
+            return results
+        results = _parallel_phase3(results, n_workers)
+
+    results["total_time_s"] = time.perf_counter() - t_total
+    _save_checkpoint(results)
+    return results
+
+
+def _parallel_phase1(results: dict, n_workers: int) -> dict:
+    """Phase 1 in parallel: all classical baselines."""
+    logger.info("=" * 60)
+    logger.info("PHASE 1: CLASSICAL BASELINES (parallel)")
+    logger.info("=" * 60)
+
+    phase1 = results.setdefault("phase1_classical", {})
+    t_phase = time.perf_counter()
+
+    # Build job list for model-level tasks
+    model_jobs = []
+    for task in MODEL_LEVEL_TASKS:
+        name = task["name"]
+        if name in phase1 and phase1[name].get("completed"):
+            continue
+        gen_name = _GENERATOR_NAMES[id(task["generator"])]
+        for seed in SEEDS:
+            model_jobs.append({
+                "task_name": name,
+                "model_name": "classical",
+                "seed": seed,
+                "generator_name": gen_name,
+                "generator_params": task["params"],
+                "vocab_size": task["vocab_size"],
+            })
+
+    # Build job list for circuit-level tasks
+    circuit_jobs = []
+    for task in CIRCUIT_LEVEL_TASKS:
+        name = task["name"]
+        if name in phase1 and phase1[name].get("completed"):
+            continue
+        for seed in SEEDS:
+            circuit_jobs.append({
+                "task_name": name,
+                "model_name": "classical",
+                "seed": seed,
+                "params": task["params"],
+            })
+
+    logger.info(f"  Dispatching {len(model_jobs)} model-level + {len(circuit_jobs)} circuit-level jobs")
+
+    # Run model-level jobs
+    if model_jobs:
+        with mp.Pool(n_workers, initializer=_worker_init) as pool:
+            model_results = pool.map(_run_model_level_job, model_jobs)
+        _collect_phase1_model_results(phase1, model_results)
+
+    # Run circuit-level jobs
+    if circuit_jobs:
+        with mp.Pool(n_workers, initializer=_worker_init) as pool:
+            circuit_results = pool.map(_run_circuit_level_job, circuit_jobs)
+        _collect_phase1_circuit_results(phase1, circuit_results)
+
+    elapsed = time.perf_counter() - t_phase
+    logger.info(f"\n  Phase 1 complete in {elapsed:.0f}s ({elapsed/60:.1f} min)")
+    results["phase1_time_s"] = elapsed
+    _save_checkpoint(results)
+    return results
+
+
+def _parallel_phase2(results: dict, n_workers: int) -> dict:
+    """Phase 2 in parallel: quantum probe, seed=42 only."""
+    logger.info("=" * 60)
+    logger.info("PHASE 2: QUANTUM PROBE (parallel, seed=42)")
+    logger.info("=" * 60)
+
+    phase2 = results.setdefault("phase2_quantum_probe", {})
+    t_phase = time.perf_counter()
+
+    model_jobs = []
+    for task in MODEL_LEVEL_TASKS:
+        name = task["name"]
+        if name in phase2 and phase2[name].get("completed"):
+            continue
+        gen_name = _GENERATOR_NAMES[id(task["generator"])]
+        model_jobs.append({
+            "task_name": name,
+            "model_name": "quantum_6q",
+            "seed": 42,
+            "generator_name": gen_name,
+            "generator_params": task["params"],
+            "vocab_size": task["vocab_size"],
+        })
+
+    circuit_jobs = []
+    for task in CIRCUIT_LEVEL_TASKS:
+        name = task["name"]
+        if name in phase2 and phase2[name].get("completed"):
+            continue
+        circuit_jobs.append({
+            "task_name": name,
+            "model_name": "quantum",
+            "seed": 42,
+            "params": task["params"],
+        })
+
+    logger.info(f"  Dispatching {len(model_jobs)} model-level + {len(circuit_jobs)} circuit-level jobs")
+
+    if model_jobs:
+        with mp.Pool(n_workers, initializer=_worker_init) as pool:
+            model_results = pool.map(_run_model_level_job, model_jobs)
+        _collect_phase2_model_results(phase2, model_results, results)
+
+    if circuit_jobs:
+        with mp.Pool(n_workers, initializer=_worker_init) as pool:
+            circuit_results = pool.map(_run_circuit_level_job, circuit_jobs)
+        _collect_phase2_circuit_results(phase2, circuit_results, results)
+
+    elapsed = time.perf_counter() - t_phase
+    logger.info(f"\n  Phase 2 complete in {elapsed:.0f}s ({elapsed/3600:.1f} hours)")
+    results["phase2_time_s"] = elapsed
+
+    promising = [name for name, data in phase2.items() if data.get("promising")]
+    results["promising_tasks"] = promising
+    logger.info(f"  Promising tasks ({len(promising)}): {promising}")
+    _save_checkpoint(results)
+    return results
+
+
+def _parallel_phase3(results: dict, n_workers: int) -> dict:
+    """Phase 3 in parallel: full 5-seed sweep on promising tasks."""
+    logger.info("=" * 60)
+    logger.info("PHASE 3: FULL QUANTUM SWEEP (parallel, 5 seeds)")
+    logger.info("=" * 60)
+
+    promising = results.get("promising_tasks", [])
+    if not promising:
+        logger.info("  No promising tasks. Skipping Phase 3.")
+        return results
+
+    logger.info(f"  Running full sweep on: {promising}")
+    phase3 = results.setdefault("phase3_full_sweep", {})
+    t_phase = time.perf_counter()
+
+    model_jobs = []
+    for task in MODEL_LEVEL_TASKS:
+        name = task["name"]
+        if name not in promising:
+            continue
+        if name in phase3 and phase3[name].get("completed"):
+            continue
+        gen_name = _GENERATOR_NAMES[id(task["generator"])]
+        for seed in SEEDS:
+            model_jobs.append({
+                "task_name": name,
+                "model_name": "quantum_6q",
+                "seed": seed,
+                "generator_name": gen_name,
+                "generator_params": task["params"],
+                "vocab_size": task["vocab_size"],
+            })
+
+    circuit_jobs = []
+    for task in CIRCUIT_LEVEL_TASKS:
+        name = task["name"]
+        if name not in promising:
+            continue
+        if name in phase3 and phase3[name].get("completed"):
+            continue
+        for seed in SEEDS:
+            circuit_jobs.append({
+                "task_name": name,
+                "model_name": "quantum",
+                "seed": seed,
+                "params": task["params"],
+            })
+
+    logger.info(f"  Dispatching {len(model_jobs)} model-level + {len(circuit_jobs)} circuit-level jobs")
+
+    if model_jobs:
+        with mp.Pool(n_workers, initializer=_worker_init) as pool:
+            model_results = pool.map(_run_model_level_job, model_jobs)
+        _collect_phase3_model_results(phase3, model_results, results)
+
+    if circuit_jobs:
+        with mp.Pool(n_workers, initializer=_worker_init) as pool:
+            circuit_results = pool.map(_run_circuit_level_job, circuit_jobs)
+        _collect_phase3_circuit_results(phase3, circuit_results, results)
+
+    elapsed = time.perf_counter() - t_phase
+    logger.info(f"\n  Phase 3 complete in {elapsed:.0f}s ({elapsed/3600:.1f} hours)")
+    results["phase3_time_s"] = elapsed
+    _save_checkpoint(results)
+    return results
+
+
+def _collect_phase1_model_results(phase1: dict, job_results: list[dict]):
+    """Aggregate parallel model-level results into phase1 dict."""
+    task_lookup = {t["name"]: t for t in MODEL_LEVEL_TASKS}
+    grouped = {}
+    for jr in job_results:
+        name = jr["task_name"]
+        grouped.setdefault(name, []).append(jr["result"])
+
+    for name, task_results in grouped.items():
+        task = task_lookup[name]
+        accs = [r["final_test_acc"] for r in task_results]
+        ci = confidence_interval(accs)
+        phase1[name] = {
+            "display": task["display"],
+            "category": task["category"],
+            "seeds": task_results,
+            "mean_acc": ci["mean"],
+            "ci_95": [ci["ci_low"], ci["ci_high"]],
+            "std": ci["std"],
+            "params": task_results[0]["params"],
+            "completed": True,
+        }
+        logger.info(f"  {task['display']}: {ci['mean']*100:.1f}% "
+                   f"[{ci['ci_low']*100:.1f}%, {ci['ci_high']*100:.1f}%]")
+
+
+def _collect_phase1_circuit_results(phase1: dict, job_results: list[dict]):
+    """Aggregate parallel circuit-level results into phase1 dict."""
+    task_lookup = {t["name"]: t for t in CIRCUIT_LEVEL_TASKS}
+    grouped = {}
+    for jr in job_results:
+        name = jr["task_name"]
+        grouped.setdefault(name, []).append(jr["result"])
+
+    for name, task_results in grouped.items():
+        task = task_lookup[name]
+        accs = [r["final_test_acc"] for r in task_results]
+        ci = confidence_interval(accs)
+        phase1[name] = {
+            "display": task["display"],
+            "category": task["category"],
+            "seeds": task_results,
+            "mean_acc": ci["mean"],
+            "ci_95": [ci["ci_low"], ci["ci_high"]],
+            "std": ci["std"],
+            "completed": True,
+        }
+        logger.info(f"  {task['display']}: {ci['mean']*100:.1f}%")
+
+
+def _collect_phase2_model_results(phase2: dict, job_results: list[dict], results: dict):
+    """Aggregate parallel Phase 2 model-level results."""
+    task_lookup = {t["name"]: t for t in MODEL_LEVEL_TASKS}
+    for jr in job_results:
+        name = jr["task_name"]
+        task = task_lookup[name]
+        result = jr["result"]
+        classical_acc = results.get("phase1_classical", {}).get(name, {}).get("mean_acc", 0.5)
+        advantage = result["final_test_acc"] - classical_acc
+
+        phase2[name] = {
+            "display": task["display"],
+            "category": task["category"],
+            "result": result,
+            "quantum_acc": result["final_test_acc"],
+            "classical_acc": classical_acc,
+            "advantage": advantage,
+            "promising": advantage > ADVANTAGE_THRESHOLD,
+            "completed": True,
+        }
+        flag = " ★ PROMISING" if advantage > ADVANTAGE_THRESHOLD else ""
+        logger.info(f"  {task['display']}: quantum={result['final_test_acc']*100:.1f}% "
+                   f"(adv={advantage*100:+.1f}%){flag}")
+
+
+def _collect_phase2_circuit_results(phase2: dict, job_results: list[dict], results: dict):
+    """Aggregate parallel Phase 2 circuit-level results."""
+    task_lookup = {t["name"]: t for t in CIRCUIT_LEVEL_TASKS}
+    for jr in job_results:
+        name = jr["task_name"]
+        task = task_lookup[name]
+        result = jr["result"]
+        classical_acc = results.get("phase1_classical", {}).get(name, {}).get("mean_acc", 0.25)
+        advantage = result["final_test_acc"] - classical_acc
+
+        phase2[name] = {
+            "display": task["display"],
+            "category": task["category"],
+            "result": result,
+            "quantum_acc": result["final_test_acc"],
+            "classical_acc": classical_acc,
+            "advantage": advantage,
+            "promising": advantage > ADVANTAGE_THRESHOLD,
+            "completed": True,
+        }
+        flag = " ★ PROMISING" if advantage > ADVANTAGE_THRESHOLD else ""
+        logger.info(f"  {task['display']}: quantum={result['final_test_acc']*100:.1f}% "
+                   f"(adv={advantage*100:+.1f}%){flag}")
+
+
+def _collect_phase3_model_results(phase3: dict, job_results: list[dict], results: dict):
+    """Aggregate parallel Phase 3 model-level results."""
+    task_lookup = {t["name"]: t for t in MODEL_LEVEL_TASKS}
+    grouped = {}
+    for jr in job_results:
+        name = jr["task_name"]
+        grouped.setdefault(name, []).append(jr["result"])
+
+    for name, task_results in grouped.items():
+        task = task_lookup[name]
+        q_accs = [r["final_test_acc"] for r in task_results]
+        c_accs = [r["final_test_acc"] for r in
+                  results["phase1_classical"][name]["seeds"]]
+        ci_q = confidence_interval(q_accs)
+        sig = paired_significance(c_accs, q_accs)
+
+        phase3[name] = {
+            "display": task["display"],
+            "category": task["category"],
+            "seeds": task_results,
+            "mean_acc": ci_q["mean"],
+            "ci_95": [ci_q["ci_low"], ci_q["ci_high"]],
+            "std": ci_q["std"],
+            "significance": sig,
+            "completed": True,
+        }
+        star = "★" if sig["significant"] else ""
+        logger.info(f"  {task['display']}: {ci_q['mean']*100:.1f}% "
+                   f"(p={sig['p_value']:.4f}, d={sig['cohens_d']:.2f}) {star}")
+
+
+def _collect_phase3_circuit_results(phase3: dict, job_results: list[dict], results: dict):
+    """Aggregate parallel Phase 3 circuit-level results."""
+    task_lookup = {t["name"]: t for t in CIRCUIT_LEVEL_TASKS}
+    grouped = {}
+    for jr in job_results:
+        name = jr["task_name"]
+        grouped.setdefault(name, []).append(jr["result"])
+
+    for name, task_results in grouped.items():
+        task = task_lookup[name]
+        q_accs = [r["final_test_acc"] for r in task_results]
+        c_accs = [r["final_test_acc"] for r in
+                  results["phase1_classical"][name]["seeds"]]
+        ci_q = confidence_interval(q_accs)
+        sig = paired_significance(c_accs, q_accs)
+
+        phase3[name] = {
+            "display": task["display"],
+            "category": task["category"],
+            "seeds": task_results,
+            "mean_acc": ci_q["mean"],
+            "ci_95": [ci_q["ci_low"], ci_q["ci_high"]],
+            "std": ci_q["std"],
+            "significance": sig,
+            "completed": True,
+        }
+        star = "★" if sig["significant"] else ""
+        logger.info(f"  {task['display']}: {ci_q['mean']*100:.1f}% "
+                   f"(p={sig['p_value']:.4f}) {star}")
+
+
+# ======================================================================
+# Phase 1: Classical Baselines (Sequential)
 # ======================================================================
 
 def run_phase1_classical(results: dict) -> dict:
@@ -792,6 +1328,8 @@ def _get_machine_info() -> str:
 def main():
     parser = argparse.ArgumentParser(description="Quantum Benchmark Master Script")
     parser.add_argument("--phase", type=int, choices=[1, 2, 3], help="Run specific phase only")
+    parser.add_argument("--parallel", nargs="?", const=0, type=int, metavar="N",
+                        help="Use N CPU cores (default: all available)")
     parser.add_argument("--report", action="store_true", help="Generate report from existing results")
     parser.add_argument("--fresh", action="store_true", help="Ignore checkpoint, start fresh")
     args = parser.parse_args()
@@ -817,23 +1355,35 @@ def main():
 
     results["timestamp"] = datetime.now().isoformat()
     results["machine_info"] = _get_machine_info()
+
+    # Determine parallelism
+    if args.parallel is not None:
+        n_workers = args.parallel if args.parallel > 0 else mp.cpu_count()
+        results["n_workers"] = n_workers
+        logger.info(f"CPUs available: {mp.cpu_count()}, using: {n_workers}")
+    else:
+        n_workers = 0  # sequential
+
     t_total = time.perf_counter()
 
     try:
-        if args.phase is None or args.phase == 1:
-            results = run_phase1_classical(results)
+        if n_workers > 1:
+            results = run_parallel(results, n_workers, phase=args.phase)
+        else:
+            if args.phase is None or args.phase == 1:
+                results = run_phase1_classical(results)
 
-        if args.phase is None or args.phase == 2:
-            if "phase1_classical" not in results:
-                logger.error("Phase 1 must complete before Phase 2. Run --phase 1 first.")
-                return
-            results = run_phase2_quantum_probe(results)
+            if args.phase is None or args.phase == 2:
+                if "phase1_classical" not in results:
+                    logger.error("Phase 1 must complete before Phase 2. Run --phase 1 first.")
+                    return
+                results = run_phase2_quantum_probe(results)
 
-        if args.phase is None or args.phase == 3:
-            if "phase2_quantum_probe" not in results:
-                logger.error("Phase 2 must complete before Phase 3. Run --phase 2 first.")
-                return
-            results = run_phase3_full_sweep(results)
+            if args.phase is None or args.phase == 3:
+                if "phase2_quantum_probe" not in results:
+                    logger.error("Phase 2 must complete before Phase 3. Run --phase 2 first.")
+                    return
+                results = run_phase3_full_sweep(results)
 
     except KeyboardInterrupt:
         logger.info("\n\nInterrupted! Saving checkpoint...")
