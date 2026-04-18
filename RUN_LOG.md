@@ -148,3 +148,27 @@ An Adaptive Qubit Mixture of Experts (MoE) model was trained on the local Linux 
 *   **Final Output Check:** Prompt: 'To be' → Output: 'To beeee oubun buruooo o ooooohooo oaoooooBoo'
 
 **Conclusion:** The MoE architecture successfully trains and converges rapidly (loss dropping from 2.96 to 0.53). The step time is higher (~3300ms/step) compared to the standard performance-tuned model (~1050ms/step) because the MoE router dynamically routes tokens and executes larger quantum circuits (up to 12 qubits) on the fly.
+
+---
+
+## Run 5: Head-to-Head Architecture Comparison
+**Date:** April 17, 2026
+**Environment:** Ubuntu Linux, Python 3.12, `lightning.qubit` (C++ adjoint)
+
+### 1. Classical vs. Quantum vs. MoE Execution
+A comparative experiment (`experiment_head_to_head.py`) was executed to evaluate the performance differences between architectures. 
+*Note on Class Balance: Recorded at 0.48 (near the ideal ~0.50).*
+
+**1. Classical Baseline (0 quantum heads):**
+*   **Parameters:** 2,352 
+*   **Execution Time:** Extremely fast (~0.3-0.4s per epoch).
+*   **Result (Final):** By Epoch 20, loss plateaued at `0.1362`. Accuracy settled at ~54.5% test / 48.0% train.
+
+**2. Standard Quantum (1 fixed 6-qubit head):**
+*   **Parameters:** 2,390 (38 quantum)
+*   **Execution Time:** ~108s per epoch.
+*   **Result (Final):** Loss successfully dropped lower than the classical baseline (hitting `0.1262` by Epoch 20). Train accuracy hit up to 59.0%.
+
+**3. Adaptive MoE (6/9/12 qubit router):**
+*   **Parameters:** 2,532 (117 quantum)
+*   **Status (In Progress):** Currently running. Epoch 1 completed in 655.7s with an initial loss of `0.7056`. The dynamic routing overhead significantly increases epoch duration, but testing is ongoing to see if it yields superior final loss or accuracy.
