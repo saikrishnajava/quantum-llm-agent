@@ -92,25 +92,25 @@ class HybridQuantumTrainer:
                 setattr(parent, attr_name, flat_params[idx : idx + size].reshape(shape))
                 idx += size
 
-            logits = self.model(input_ids)
-            loss = self.loss_fn(
-                logits.reshape(-1, logits.shape[-1]),
-                labels.reshape(-1),
-            )
+            try:
+                logits = self.model(input_ids)
+                loss = self.loss_fn(
+                    logits.reshape(-1, logits.shape[-1]),
+                    labels.reshape(-1),
+                )
 
-            # Collect MoE load-balance losses
-            load_balance_loss = 0.0
-            for layer in getattr(self.model, 'layers', []):
-                attn = getattr(layer, 'attention', None)
-                if attn and hasattr(attn, 'load_balance_losses'):
-                    for lb in attn.load_balance_losses:
-                        load_balance_loss = load_balance_loss + lb
-                    attn.load_balance_losses = []
-            if load_balance_loss != 0.0:
-                loss = loss + 0.01 * load_balance_loss
-
-            for parent, attr_name, original in saved:
-                setattr(parent, attr_name, original)
+                load_balance_loss = 0.0
+                for layer in getattr(self.model, 'layers', []):
+                    attn = getattr(layer, 'attention', None)
+                    if attn and hasattr(attn, 'load_balance_losses'):
+                        for lb in attn.load_balance_losses:
+                            load_balance_loss = load_balance_loss + lb
+                        attn.load_balance_losses = []
+                if load_balance_loss != 0.0:
+                    loss = loss + 0.01 * load_balance_loss
+            finally:
+                for parent, attr_name, original in saved:
+                    setattr(parent, attr_name, original)
 
             return loss
 

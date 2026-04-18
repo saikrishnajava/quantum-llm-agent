@@ -156,8 +156,15 @@ class QuantumPositionalCircuit(Module):
 
 class QuantumAttentionCircuit(Module):
     """
-    Parameterised circuit for a single quantum attention head.
-    Divides qubits into Q, K, V registers.
+    Quantum attention: computes Q-K similarity and applies it to V.
+
+    Mechanism:
+      1. Encode Q, K, V into separate qubit registers
+      2. CNOT(Q, K) computes |Q⟩|K⊕Q⟩ — when Q≈K, K-register → |0⟩
+      3. Controlled rotations from K to V transfer the similarity signal
+      4. Trainable refinement on V-register preserves the Q-K→V structure
+      5. Undo Q-K CNOT to reset K for next layer
+      6. Measure PauliZ on V-register
     """
 
     def __init__(self, n_qubits: int = 6, n_layers: int = 2):
@@ -170,8 +177,9 @@ class QuantumAttentionCircuit(Module):
         self.device = qml.device("default.qubit", wires=n_qubits)
         self._build_circuit()
 
-        n_params = n_qubits * n_layers * 2 + self.qubits_per_register
-        self.params = Parameter(np.random.randn(n_params) * 0.1)
+        qpr = self.qubits_per_register
+        n_params = n_layers * (qpr + qpr * 2)
+        self.params = Parameter(np.random.randn(n_params) * 0.5)
 
     def _build_circuit(self):
         qpr = self.qubits_per_register
@@ -186,18 +194,22 @@ class QuantumAttentionCircuit(Module):
             qml.AmplitudeEmbedding(v_features, wires=v_wires, normalize=True)
 
             idx = 0
-            for i in range(qpr):
-                qml.CNOT(wires=[q_wires[i], k_wires[i]])
-                qml.RY(params[idx], wires=k_wires[i])
-                idx += 1
-
-            for _ in range(self.n_layers):
-                for i in range(self.n_qubits):
-                    qml.RY(params[idx], wires=i)
-                    qml.RZ(params[idx + 1], wires=i)
+            for layer in range(self.n_layers):
+                for i in range(qpr):
+                    qml.CNOT(wires=[q_wires[i], k_wires[i]])
+                for i in range(qpr):
+                    qml.CNOT(wires=[k_wires[i], v_wires[i]])
+                    qml.RY(params[idx], wires=v_wires[i])
+                    qml.CNOT(wires=[k_wires[i], v_wires[i]])
+                    idx += 1
+                for i in range(qpr):
+                    qml.RY(params[idx], wires=v_wires[i])
+                    qml.RZ(params[idx + 1], wires=v_wires[i])
                     idx += 2
-                for i in range(self.n_qubits - 1):
-                    qml.CNOT(wires=[i, i + 1])
+                for i in range(qpr - 1):
+                    qml.CNOT(wires=[v_wires[i], v_wires[i + 1]])
+                for i in range(qpr):
+                    qml.CNOT(wires=[q_wires[i], k_wires[i]])
 
             return [qml.expval(qml.PauliZ(w)) for w in v_wires]
 
@@ -221,18 +233,31 @@ class QuantumAttentionCircuit(Module):
         v_wires = list(range(2 * qpr, 3 * qpr))
 
         idx = 0
-        for i in range(qpr):
-            state = apply_cnot(state, q_wires[i], k_wires[i], n)
-            state = apply_gate(state, _ry(self.params[idx]), k_wires[i], n)
-            idx += 1
+        for layer in range(self.n_layers):
+            # Q-K similarity: CNOT(Q,K) → |Q⟩|K⊕Q⟩
+            for i in range(qpr):
+                state = apply_cnot(state, q_wires[i], k_wires[i], n)
 
-        for _ in range(self.n_layers):
-            for i in range(n):
-                state = apply_gate(state, _ry(self.params[idx]), i, n)
-                state = apply_gate(state, _rz(self.params[idx + 1]), i, n)
+            # K→V controlled transfer: similarity modulates V
+            for i in range(qpr):
+                state = apply_cnot(state, k_wires[i], v_wires[i], n)
+                state = apply_gate(state, _ry(self.params[idx]), v_wires[i], n)
+                state = apply_cnot(state, k_wires[i], v_wires[i], n)
+                idx += 1
+
+            # V refinement (trainable, V-register only)
+            for i in range(qpr):
+                state = apply_gate(state, _ry(self.params[idx]), v_wires[i], n)
+                state = apply_gate(state, _rz(self.params[idx + 1]), v_wires[i], n)
                 idx += 2
-            for i in range(n - 1):
-                state = apply_cnot(state, i, i + 1, n)
+
+            # V entanglement
+            for i in range(qpr - 1):
+                state = apply_cnot(state, v_wires[i], v_wires[i + 1], n)
+
+            # Reset K register for next layer
+            for i in range(qpr):
+                state = apply_cnot(state, q_wires[i], k_wires[i], n)
 
         return anp.array([pauli_z_expval(state, w, n) for w in v_wires])
 

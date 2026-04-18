@@ -90,11 +90,11 @@ class AdaptiveQuantumHead(Module):
         load_loss = anp.sum(gate_probs.mean(axis=0) ** 2)
 
         if not is_training:
-            expert_idx = int(anp.argmax(gate_probs[0]))
-            circuit = self.experts[expert_idx]
-            proj = self.projections[expert_idx]
             seq_outs = []
             for b in range(batch):
+                expert_idx = int(anp.argmax(gate_probs[b]))
+                circuit = self.experts[expert_idx]
+                proj = self.projections[expert_idx]
                 for s in range(seq):
                     qc_out = circuit(q[b, s], k[b, s], v[b, s])
                     seq_outs.append(proj(qc_out))
