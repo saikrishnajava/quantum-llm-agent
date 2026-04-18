@@ -67,3 +67,23 @@ large:
     attention_qubits: 16
     activation_qubits: 8
     use_quantum_activation: true
+
+# --- Adaptive Qubit MoE ---
+moe_small:
+  vocab_size: 10000
+  d_model: 64
+  n_layers: 1
+  n_heads: 4
+  quantum_heads_per_layer: 1
+  d_ff: 128
+  max_seq_length: 64
+  dropout: 0.0
+  quantum:
+    use_quantum_embedding: false
+    embedding_qubits: 3
+    attention_qubits: 6
+    activation_qubits: 3
+    use_quantum_activation: false
+    use_moe: true
+    moe_qubit_configs: [6, 9, 12]
+    moe_temperature: 1.0

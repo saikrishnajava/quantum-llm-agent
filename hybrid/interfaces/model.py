@@ -15,6 +15,7 @@ import numpy as np
 from classical.nn import Module, Linear, LayerNorm, Dropout, Softmax
 from hybrid.embeddings.hybrid_embedding import HybridEmbeddingLayer
 from hybrid.attention.quantum_attention import QuantumMultiHeadAttention
+from hybrid.attention.moe_attention import MoEQuantumMultiHeadAttention
 from hybrid.feedforward.hybrid_ff import HybridFeedForward
 
 logger = logging.getLogger(__name__)
@@ -40,13 +41,25 @@ class HybridTransformerBlock(Module):
             quantum_config = {}
 
         self.norm1 = LayerNorm(d_model)
-        self.attention = QuantumMultiHeadAttention(
-            d_model=d_model,
-            n_heads=n_heads,
-            quantum_heads=quantum_heads,
-            quantum_qubits=quantum_config.get("attention_qubits", 6),
-            dropout=dropout,
-        )
+
+        use_moe = quantum_config.get("use_moe", False)
+        if use_moe and quantum_heads > 0:
+            self.attention = MoEQuantumMultiHeadAttention(
+                d_model=d_model,
+                n_heads=n_heads,
+                moe_heads=quantum_heads,
+                qubit_configs=quantum_config.get("moe_qubit_configs", [6, 9, 12]),
+                dropout=dropout,
+                temperature=quantum_config.get("moe_temperature", 1.0),
+            )
+        else:
+            self.attention = QuantumMultiHeadAttention(
+                d_model=d_model,
+                n_heads=n_heads,
+                quantum_heads=quantum_heads,
+                quantum_qubits=quantum_config.get("attention_qubits", 6),
+                dropout=dropout,
+            )
         self.norm2 = LayerNorm(d_model)
         self.feed_forward = HybridFeedForward(
             d_model=d_model,

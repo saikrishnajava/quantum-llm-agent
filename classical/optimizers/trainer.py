@@ -98,6 +98,17 @@ class HybridQuantumTrainer:
                 labels.reshape(-1),
             )
 
+            # Collect MoE load-balance losses
+            load_balance_loss = 0.0
+            for layer in getattr(self.model, 'layers', []):
+                attn = getattr(layer, 'attention', None)
+                if attn and hasattr(attn, 'load_balance_losses'):
+                    for lb in attn.load_balance_losses:
+                        load_balance_loss = load_balance_loss + lb
+                    attn.load_balance_losses = []
+            if load_balance_loss != 0.0:
+                loss = loss + 0.01 * load_balance_loss
+
             for parent, attr_name, original in saved:
                 setattr(parent, attr_name, original)
 
