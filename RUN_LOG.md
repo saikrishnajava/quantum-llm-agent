@@ -197,4 +197,7 @@ Following a major codebase redesign to compute real Q-K→V attention (fixing a 
 *   **Result (Final):** Loss successfully dropped lower than the classical baseline (hitting `0.1193` by Epoch 20). Train accuracy achieved 58.0% (at Epoch 15-19), once again demonstrating the quantum entanglement advantage for this XOR task.
 
 **3. Adaptive MoE (6/9/12 qubit router):**
-*   **Status (In Progress):** Currently running...
+*   **Parameters:** 11,664 total (117 quantum)
+*   **Status (In Progress):** Currently running (Epoch 11/20).
+*   **Execution Time:** Extremely heavy computational overhead (~1,998s - 2,470s per epoch).
+*   **Current Metrics:** Loss has steadily dropped from `2.9392` (Epoch 1) down to `0.2805` (Epoch 11). Training is actively continuing to see if it can break the `0.1193` standard quantum baseline.
