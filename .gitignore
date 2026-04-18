@@ -24,3 +24,10 @@ Thumbs.db
 *.log
 *.profraw
 *.pkl
+
+# Planning and research docs (not committed)
+NEW_SESSION_PROMPT.md
+QUANTUM_REASONING_PIVOT_RESEARCH.md
+QUANTUM_LLM_AGENT_MASTER_PLAN.md
+*_RESEARCH*.md
+*_PROMPT*.md
