@@ -1,8 +1,8 @@
 # Quantum-Simulated LLM with Agentic Workflows
 
-**The world's first hybrid quantum-classical language model with quantum-enhanced agentic reasoning.**
+**A hybrid quantum-classical language model with adaptive qubit routing and agentic workflows.**
 
-Built entirely on PennyLane + NumPy. Zero PyTorch dependency.
+Research proof-of-concept exploring whether quantum circuits can meaningfully enhance transformer attention. Not a production model — a working experiment with end-to-end trainability through quantum circuits.
 
 [![License: Proprietary](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
@@ -18,13 +18,13 @@ A hybrid transformer where key components run through parameterized quantum circ
 |-----------|-----------|---------|
 | **Token Embedding** | Lookup table | + Quantum feature map (amplitude encoding) |
 | **Positional Encoding** | Sinusoidal | + Quantum angle encoding per position |
-| **Attention** | Scaled dot-product | + Quantum attention heads (Q/K/V registers) |
+| **Attention** | Scaled dot-product | + Adaptive qubit MoE (6/9/12 qubit experts with trainable router) |
 | **Activation** | GELU | + Quantum activation circuit |
 | **Reasoning** | — | Quantum decision circuit + pattern matcher |
 | **Memory** | — | Quantum associative recall |
 | **Agent** | Tool-use loop | Quantum-enhanced tool selection + multi-agent coordination |
 
-The model trains end-to-end — gradients flow through quantum circuits via backpropagation through the simulator.
+Built on PennyLane + NumPy. Zero PyTorch dependency. Includes a fast numpy quantum simulator (14x faster than PennyLane QNode for small circuits).
 
 ## Architecture
 
@@ -141,11 +141,14 @@ quantum-llm-agent/
 
 | Metric | Value |
 |--------|-------|
-| Total qubits used | ~12 (across all components) |
 | Quantum circuit types | 6 (feature map, positional, attention, activation, decision, pattern) |
+| Adaptive qubit MoE | Trainable router over 6/9/12 qubit experts |
 | Training | End-to-end gradient flow through quantum circuits |
-| Tests | 50 passing |
+| Fast simulator | 14x faster than PennyLane QNode (numpy tensor ops) |
+| Tests | 55 passing |
 | Dependencies | PennyLane + NumPy only |
+
+**Current scale:** ~11K params, character-level, trained on Shakespeare. Output is not coherent — this is a proof-of-concept for the architecture, not a production language model.
 
 ## Requirements
 
@@ -196,4 +199,4 @@ For licensing inquiries, research collaboration, or commercial use, contact Saik
 
 ---
 
-*This is a research proof-of-concept demonstrating that quantum circuits can be meaningfully integrated into transformer architectures with end-to-end trainability. It is not a production language model.*
+*This is a research proof-of-concept. It demonstrates that quantum circuits can be integrated into a transformer architecture with end-to-end trainability and adaptive qubit allocation. It does not produce coherent text at current scale — that requires more data, larger models, and more compute. The architecture is designed to be hardware-ready for future quantum computers.*
