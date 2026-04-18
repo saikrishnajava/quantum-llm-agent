@@ -78,8 +78,50 @@ A quick 10-step benchmark was performed to compare raw throughput across machine
 
 **Conclusion:** For this specific scale of quantum simulation (11k classical params, 50 quantum params), the Colab Tesla T4 GPU is **slower** than both the Linux CPU (~0.6x speed) and the MacBook CPU (~0.8x speed). This is a known phenomenon in quantum simulation where GPU memory transfer overhead outweighs the parallelization benefits for very small qubit counts and parameter sets.
 
-### 3. Training Execution (In Progress)
-*   **Model:** Standard Model (d=32, 1 quantum head)
+### 3. Training Execution
+*   **Model:** Standard Model (d=32, 1 quantum head, 10 epochs)
 *   **Parameters:** 11,474 params (50 quantum)
 *   **Dataset:** 168 batches/epoch
-*   **Status:** Currently training for 10 epochs.
+*   **Metrics:**
+    *   Epoch  1: loss=3.0778 (4037ms/step, 678.3s)
+    *   Epoch  2: loss=2.7044 (3903ms/step, 655.7s)
+    *   Epoch  3: loss=2.3170 (3957ms/step, 664.7s)
+    *   Epoch  4: loss=1.5211 (3901ms/step, 655.4s)
+    *   Epoch  5: loss=0.9570 (3886ms/step, 652.9s)
+    *   Epoch  6: loss=0.7008 (3943ms/step, 662.4s)
+    *   Epoch  7: loss=0.5579 (3999ms/step, 671.8s)
+    *   Epoch  8: loss=0.4939 (3923ms/step, 659.1s)
+    *   Epoch  9: loss=0.4557 (3836ms/step, 644.5s)
+    *   Epoch 10: loss=0.4220 (3906ms/step, 656.2s)
+*   **Result:** Done in 6600.9s (110.0 min) | Loss: 3.0778 -> 0.4220
+*   **Generation Output:**
+    *   `"To be" -> "To beeeepe t toTCTegoTosgodoToooCooooooooooooooqFoooooooooooooooo"`
+    *   `"The fault" -> "The faulthetk\nThTOgngTcoCoCoCoTooCoooTooToooooooooooo\noooooooooooooo"`
+    *   `"Now is" -> "Now isssthofthoTwSCCTocogoooooooooo dooooooooooooooooooooooooooooo"`
+    *   `"A horse" -> "A horsee angsTCbgCiCTCTosgooTooonoToooooooOoooooooooooooooooOoooooo"`
+
+### 4. Bigger Model Execution (Aborted / Half-Baked)
+*   **Model:** Bigger Model (d=64, 2 layers, 2 qheads, quantum embed)
+*   **Parameters:** 104,724 params (180 quantum)
+*   **Dataset:** 335 batches/epoch
+*   **Status:** Run was aborted / incomplete before training epochs could finish.
+
+---
+
+## Run 3: Ubuntu Linux (Performance Tuned CPU)
+**Date:** April 17, 2026
+**Environment:** Ubuntu Linux, Python 3.12, `lightning.qubit` (C++ adjoint)
+
+### 1. Training Execution
+Following performance optimizations, the training was re-run on the Linux CPU, demonstrating a massive speedup compared to Run 1.
+
+**Metrics (Final):**
+*   **Epoch 1 Loss:** 3.0662 (Speed: ~1089ms/step, ~182.9s total)
+*   **Epoch 2 Loss:** 2.6697 (Speed: ~1099ms/step, ~184.6s total)
+*   **Epoch 3 Loss:** 1.9016 (Speed: ~1055ms/step, ~177.2s total)
+*   **Epoch 4 Loss:** 1.1138 (Speed: ~1050ms/step, ~176.4s total)
+*   **Epoch 5 Loss:** 0.7741 (Speed: ~1058ms/step, ~177.7s total)
+*   **Total Training Time:** 898.8 seconds (~15.0 minutes)
+*   **Final Output Check:** Generated a small sequence: `To beeee inannnn nnnnn nnnndind nde enddeyd n`
+
+**Conclusion:** The performance bottlenecks were successfully resolved! The step time dropped from ~2450ms (Run 1) down to **~1050ms**, more than halving the total training time from 34.3 minutes down to just 15 minutes.
