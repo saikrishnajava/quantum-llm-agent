@@ -201,3 +201,35 @@ Following a major codebase redesign to compute real Q-K→V attention (fixing a 
 *   **Status (In Progress):** Currently running (Epoch 3/20).
 *   **Execution Time:** High computational overhead due to routing (~610s per epoch).
 *   **Current Metrics:** Loss has dropped to `0.6910` (Epoch 3). Training is actively continuing to see if it can break the `0.1193` standard quantum baseline.
+
+---
+
+## Run 7: Comprehensive Parallel Benchmark Sweep
+**Date:** April 18, 2026
+**Environment:** Ubuntu Linux, Python 3.12, `lightning.qubit` (C++ adjoint)
+
+### 1. Large-Scale Task Evaluation
+A full parallel benchmark suite was run across 20 tasks to rigorously identify areas of quantum advantage using the standard 6-qubit quantum head. 
+
+**Execution Metrics:**
+*   **Total Time:** ~0.8 hours (accelerated via 12-core parallel execution)
+*   **Promising Tasks (Phase 2):** 2 tasks (`k-Parity (k=5)` and `Correlated Features (pairs=2)`) showed a >3% advantage in the initial single-seed probe.
+
+### 2. Full Sweep Results (5 Seeds)
+The two promising tasks were subjected to a rigorous 5-seed sweep to determine statistical significance.
+
+*   **k-Parity (k=5):**
+    *   Classical Acc: 47.8%
+    *   Quantum Acc: 48.2%
+    *   Significance: p=0.7630, Cohen's d=0.14 (Not Significant)
+*   **Correlated Features (pairs=2):**
+    *   Classical Acc: 48.4%
+    *   Quantum Acc: 49.0%
+    *   Significance: p=0.8801, Cohen's d=0.07 (Not Significant)
+
+**Verdict: INSUFFICIENT.** No tasks showed statistically significant quantum advantage at `p < 0.05`. The observed >3% advantage in Phase 2 was due to single-seed variance. 
+
+### 3. Next Steps
+1. Investigate why advantage did not materialize across the board.
+2. Consider increasing circuit depth or qubit count (the 6-qubit scale may be fundamentally too small to express an advantage).
+3. Try different task formulations.
