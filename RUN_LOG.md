@@ -83,3 +83,23 @@ A quick 10-step benchmark was performed to compare raw throughput across machine
 *   **Parameters:** 11,474 params (50 quantum)
 *   **Dataset:** 168 batches/epoch
 *   **Status:** Currently training for 10 epochs.
+
+---
+
+## Run 3: Ubuntu Linux (Performance Tuned CPU)
+**Date:** April 17, 2026
+**Environment:** Ubuntu Linux, Python 3.12, `lightning.qubit` (C++ adjoint)
+
+### 1. Training Execution
+Following performance optimizations, the training was re-run on the Linux CPU, demonstrating a massive speedup compared to Run 1.
+
+**Metrics (Final):**
+*   **Epoch 1 Loss:** 3.0662 (Speed: ~1089ms/step, ~182.9s total)
+*   **Epoch 2 Loss:** 2.6697 (Speed: ~1099ms/step, ~184.6s total)
+*   **Epoch 3 Loss:** 1.9016 (Speed: ~1055ms/step, ~177.2s total)
+*   **Epoch 4 Loss:** 1.1138 (Speed: ~1050ms/step, ~176.4s total)
+*   **Epoch 5 Loss:** 0.7741 (Speed: ~1058ms/step, ~177.7s total)
+*   **Total Training Time:** 898.8 seconds (~15.0 minutes)
+*   **Final Output Check:** Generated a small sequence: `To beeee inannnn nnnnn nnnndind nde enddeyd n`
+
+**Conclusion:** The performance bottlenecks were successfully resolved! The step time dropped from ~2450ms (Run 1) down to **~1050ms**, more than halving the total training time from 34.3 minutes down to just 15 minutes.
