@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quantum-llm-agent"
-version = "0.1.0"
-description = "World's First Quantum-Simulated LLM with Agentic Workflows"
+name = "quantum-ml-research"
+version = "1.0.0"
+description = "Quantum-Classical Hybrid ML: Research and Findings"
 requires-python = ">=3.10"
 license = {text = "Proprietary - All Rights Reserved"}
 dependencies = [

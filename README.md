@@ -128,8 +128,8 @@ quantum-llm-agent/
 ## Quick Start
 
 ```bash
-git clone https://github.com/saikrishnajava/quantum-llm-agent.git
-cd quantum-llm-agent
+git clone https://github.com/saikrishnajava/quantum-ml-research.git
+cd quantum-ml-research
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 
@@ -167,7 +167,7 @@ Optional: `pennylane-lightning[gpu]` for GPU-accelerated simulation (NVIDIA Volt
   author = {Garikipati, Saikrishna},
   title = {Quantum-Classical Hybrid ML: Research and Findings},
   year = {2026},
-  url = {https://github.com/saikrishnajava/quantum-llm-agent}
+  url = {https://github.com/saikrishnajava/quantum-ml-research}
 }
 ```
 
