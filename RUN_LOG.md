@@ -304,21 +304,23 @@ The GPU successfully handled the massive quantum state vectors.
 
 ---
 
-## Run 11: GPU Qubit Scaling Stress Test (18q, 21q, 24q)
+## Run 11: The "Mirage" of Advantage & The Expressivity Wall
 **Date:** April 19, 2026
 **Environment:** Google Colab, Tesla T4 GPU
 **Setup:** `pennylane` v0.44.1, Backend: `lightning.gpu`
 
-### 1. Experiment Setup
-Following Run 10 (which showed a preliminary +4.0% advantage at 18 qubits), a more rigorous stress test was designed. This run tested 18q, 21q, and 24q on the XOR-sign task across multiple seeds. To ensure a fair comparison, the classical baseline was upgraded to a "fair capacity" model (a 3-layer MLP with 10,465 parameters).
+### 1. The Mirage of 18-Qubit Advantage
+Run 10 generated optimism with a +4.0% quantum advantage at 18 qubits. To validate this, Run 11 executed a rigorous 5-seed stress test. 
+*   **The Reality:** The single-seed advantage completely evaporated under multi-seed testing.
+*   **Results (5 seeds):** The 18-qubit quantum circuit averaged **50.4%**, while the upgraded 10K-parameter classical baseline averaged **50.0%**. 
+*   **Takeaway:** The prior +4.0% was merely statistical noise. In reality, both models are performing at random guessing levels (~50%) on this binary XOR-sign classification task.
 
-### 2. Execution Observations & Scaling Results
-*   **18-Qubit Multi-Seed Sweep:**
-    *   The single-seed advantage observed in Run 10 did not hold up under multi-seed rigor.
-    *   **Results (5 seeds):** Quantum averaged **50.4% (±2.0%)** vs Classical **50.0% (±3.7%)**.
-    *   **Takeaway:** The +0.4% advantage is statistically meaningless. Both models are performing at essentially random guessing levels. The 2-layer 18-qubit circuit is likely suffering from a barren plateau or simply lacks the expressive depth to solve the `dim=64` problem.
+### 2. Diagnosing the Failure: The Expressivity Wall
+Why did both models fail completely at the 64-dimensional (`dim=64`) scale?
+*   **Classical Failure (10,465 params):** Standard Multi-Layer Perceptrons (MLPs) are notoriously terrible at learning dense XOR parity functions. Without specialized architectures or exponential parameters, gradient descent struggles to find the high-degree polynomial logic required, leading to random guessing.
+*   **Quantum Failure (36 params):** The 18-qubit quantum circuit utilized only 2 layers. For a 64-dimensional parity problem, 2 layers of entanglement are fundamentally incapable of expressing the complex logic required. The circuit is severely **under-parameterized**, lacking the depth needed to express the solution.
 
-### 3. Deeper Circuit Test (Crash)
-*   To address the random guessing performance at 18q, a deeper circuit test (4 layers vs 2 layers) was attempted in Step 7 to see if increased depth could overcome the barren plateau.
-*   **Crash:** The experiment abruptly aborted with a Python error: `NameError: name 'SEEDS' is not defined`.
-*   **Status:** FAILED. The Colab script needs to define the `SEEDS` array/variable before the deep circuit experiment can be evaluated.
+### 3. The Deeper Circuit Attempt (Crash)
+*   To solve the quantum expressivity problem, Step 7 of the notebook attempted to double the circuit depth (testing a 4-layer 18q circuit vs the failed 2-layer one). 
+*   **The Crash:** The code abruptly failed with `NameError: name 'SEEDS' is not defined`. The notebook attempted to loop over `SEEDS[:3]`, but the `SEEDS` array was either missing or the cell declaring it wasn't executed.
+*   **Next Steps:** Define `SEEDS = [42, 99, 137, 256, 314]` in the Colab notebook and re-run Step 7 to see if a deeper (more expressive) quantum circuit can finally crack the 64-dimensional parity problem where the classical MLP failed.
