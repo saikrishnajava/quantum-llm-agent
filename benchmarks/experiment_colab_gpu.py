@@ -35,17 +35,30 @@ import pennylane.numpy as pnp
 # ======================================================================
 
 def select_device(n_qubits: int):
-    """Pick best available backend. GPU first, then C++ CPU, then default."""
+    """Pick best available backend. GPU required for >10 qubits — kills process if unavailable."""
     for backend in ["lightning.gpu", "lightning.qubit", "default.qubit"]:
         try:
             dev = qml.device(backend, wires=n_qubits)
+            if n_qubits > 10 and "gpu" not in backend:
+                print(f"  WARNING: [{n_qubits}q] Fell back to CPU backend '{backend}'")
+                print(f"  ABORTING: >10 qubits on CPU is infeasible (exponential time).")
+                print(f"  Ensure you're on a GPU runtime: Runtime → Change runtime type → GPU")
+                print(f"  Required: pennylane-lightning[gpu]")
+                print(f"  Install: !pip install pennylane-lightning[gpu]")
+                import sys
+                sys.exit(1)
             print(f"  [{n_qubits}q] Using backend: {backend}")
             return dev, backend
-        except Exception:
+        except Exception as e:
+            if backend == "lightning.gpu":
+                print(f"  [{n_qubits}q] lightning.gpu unavailable: {e}")
             continue
-    dev = qml.device("default.qubit", wires=n_qubits)
-    print(f"  [{n_qubits}q] Using backend: default.qubit (fallback)")
-    return dev, "default.qubit"
+
+    # If we reach here, nothing worked
+    print(f"  FATAL: No quantum backend available for {n_qubits} qubits.")
+    print(f"  Install: !pip install pennylane pennylane-lightning[gpu]")
+    import sys
+    sys.exit(1)
 
 
 def get_diff_method(backend: str) -> str:
@@ -352,6 +365,27 @@ def main():
     print("=" * 60)
     print("Task: XOR-sign classification (directly exploits CNOT similarity)")
     print("Comparing: Quantum attention circuit vs Classical MLP")
+    print()
+
+    # --- Upfront GPU check: fail fast before wasting time ---
+    print("Verifying GPU availability...")
+    try:
+        test_dev = qml.device("lightning.gpu", wires=4)
+        print(f"  ✓ lightning.gpu available")
+        del test_dev
+    except Exception as e:
+        print(f"  ✗ lightning.gpu NOT available: {e}")
+        print()
+        print("  This experiment REQUIRES GPU. CPU fallback is infeasible")
+        print("  for 12-18 qubit circuits (would take days).")
+        print()
+        print("  Fix:")
+        print("    1. Use a GPU runtime: Runtime → Change runtime type → GPU")
+        print("    2. Install: !pip install pennylane-lightning[gpu]")
+        print()
+        print("  PROCESS KILLED.")
+        import sys
+        sys.exit(1)
     print()
 
     QUBIT_CONFIGS = [12, 15, 18]
