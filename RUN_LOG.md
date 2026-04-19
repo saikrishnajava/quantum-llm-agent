@@ -233,3 +233,25 @@ The two promising tasks were subjected to a rigorous 5-seed sweep to determine s
 1. Investigate why advantage did not materialize across the board.
 2. Consider increasing circuit depth or qubit count (the 6-qubit scale may be fundamentally too small to express an advantage).
 3. Try different task formulations.
+
+---
+
+## Run 8: Additive Quantum vs. Replacement Qubit Scaling
+**Date:** April 18, 2026
+**Environment:** Ubuntu Linux, Python 3.12, `lightning.qubit` (C++ adjoint)
+**Status:** Currently Running (Executing via 12-core parallel workers)
+
+### 1. Experiment Setup
+Following the findings from Run 7 (which suggested the 6-qubit limit might be responsible for the lack of quantum advantage), this run specifically evaluates the impact of **scaling up the number of qubits** (6 vs 9 vs 12) and tests **Additive vs. Replacement** quantum integration.
+
+*   **Task:** Full 8-bit XOR parity (A proven quantum-favorable task)
+*   **Configurations Evaluated (35 total jobs across 5 seeds):**
+    *   `classical_4heads` (Pure classical baseline)
+    *   `replacement_6q` / `replacement_9q` / `replacement_12q` (Replaces 1 classical head with a quantum head)
+    *   `additive_6q` / `additive_9q` / `additive_12q` (Adds a quantum head alongside the classical heads)
+
+### 2. Execution Observations
+The computational cost of simulating larger quantum circuits on classical CPU hardware became starkly apparent during this run:
+*   **Classical Speed:** The 5 purely classical jobs finished their full 20-epoch training cycles in less than 12 seconds combined.
+*   **Quantum Simulation Wall:** The 9-qubit and 12-qubit models caused massive computational bottlenecks. The 12 parallel workers were fully pinned for nearly an hour (taking ~55+ minutes per 20-epoch quantum run) before the first heavy quantum simulation finished and freed up a slot.
+*   **Takeaway:** This confirms that while scaling the qubits (9q, 12q) might theoretically yield better quantum advantage, it is hitting the absolute limit of what is practically verifiable on local classical simulation hardware.
