@@ -1,8 +1,8 @@
-# Quantum-Simulated LLM with Agentic Workflows
+# Quantum-Classical Hybrid ML: Research & Findings
 
-**A hybrid quantum-classical language model with adaptive qubit routing and agentic workflows.**
+**A rigorous experimental investigation into quantum circuit advantage for machine learning tasks.**
 
-Research proof-of-concept exploring whether quantum circuits can meaningfully enhance transformer attention. Not a production model — a working experiment with end-to-end trainability through quantum circuits.
+Built a complete hybrid quantum-classical transformer architecture, ran 11 experiments across multiple machines (CPU, GPU, Colab T4), and tested for quantum advantage on 20+ task variants at 6-24 qubits. Findings: no statistically significant quantum advantage over classical methods on any real-world task at current qubit scales.
 
 [![License: Proprietary](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
@@ -10,21 +10,46 @@ Research proof-of-concept exploring whether quantum circuits can meaningfully en
 
 ---
 
-## What This Is
+## Key Findings
 
-A hybrid transformer where key components run through parameterized quantum circuits on simulated qubits:
+| Claim Tested | Result | Evidence |
+|-------------|--------|----------|
+| Quantum attention beats classical on XOR parity | Small signal at 6q (58% vs 44%), vanishes with fair baselines | Runs 5-7 |
+| Advantage grows with qubit count (6→18→24q) | No. Both models at random chance (~50%) at 18q+ | Runs 10-11 |
+| Quantum helps on 20 reasoning task variants | 0/20 showed significant advantage (p<0.05) | Run 7 |
+| Additive quantum (keep all classical heads) helps | No measurable benefit | Run 8 |
+| Deeper circuits (4 layers vs 2) help | Untested (expressivity wall at current params) | Run 11 |
 
-| Component | Classical | Quantum |
-|-----------|-----------|---------|
-| **Token Embedding** | Lookup table | + Quantum feature map (amplitude encoding) |
-| **Positional Encoding** | Sinusoidal | + Quantum angle encoding per position |
-| **Attention** | Scaled dot-product | + Adaptive qubit MoE (6/9/12 qubit experts with trainable router) |
-| **Activation** | GELU | + Quantum activation circuit |
-| **Reasoning** | — | Quantum decision circuit + pattern matcher |
-| **Memory** | — | Quantum associative recall |
-| **Agent** | Tool-use loop | Quantum-enhanced tool selection + multi-agent coordination |
+**Conclusion:** At 6-24 qubits on simulators, the quantum attention circuit provides no practical advantage over properly-sized classical baselines. The one positive signal (58% vs 44% on full 8-bit XOR) disappears when: (a) tested on other tasks, (b) scaled to more qubits, or (c) compared against fair classical models.
 
-Built on PennyLane + NumPy. Zero PyTorch dependency. Includes a fast numpy quantum simulator (14x faster than PennyLane QNode for small circuits).
+See [FINDINGS.md](FINDINGS.md) for detailed analysis and [RUN_LOG.md](RUN_LOG.md) for raw experiment data.
+
+---
+
+## What Was Built
+
+A complete hybrid quantum-classical system — all working, tested, end-to-end trainable:
+
+| Component | Description | Status |
+|-----------|-------------|--------|
+| Quantum Attention Circuit | Q-K similarity via CNOT → V modulation | Working, 6-24 qubits |
+| Fast Numpy Simulator | Custom statevector sim, 14x faster than PennyLane | Working |
+| Adaptive Qubit MoE | Trainable router selects 6/9/12 qubit circuits | Working |
+| GPU Pipeline | lightning.gpu on Colab T4, adjoint differentiation | Working |
+| Hybrid Transformer | Full LLM architecture (embedding, attention, FFN, generation) | Working |
+| Training Pipeline | autograd + parameter-swapping, separate classical/quantum LRs | Working |
+| Benchmark Suite | 20 tasks, multi-seed, parallel, statistical analysis | Working |
+| Agent Loop | Quantum-enhanced tool selection + multi-agent coordination | Working |
+| Test Suite | 55 passing tests (unit, integration, gradient flow) | Passing |
+
+**Technical achievements:**
+- Zero PyTorch dependency (PennyLane + NumPy only)
+- 14x simulator speedup via tensor operation restructuring
+- Auto GPU/CPU backend selection based on qubit count
+- 12-core parallel benchmark execution
+- Resumable experiment checkpointing
+
+---
 
 ## Architecture
 
@@ -48,13 +73,12 @@ Input Text
 ┌─────────────────────────────────────┐
 │  Hybrid Transformer Block (×N)      │
 │  ├── LayerNorm                      │
-│  ├── Quantum Multi-Head Attention   │
-│  │   ├── Classical heads (3)        │
-│  │   └── MoE Quantum head           │
-│  │       └── Router → 6/9/12 qubits │
+│  ├── Multi-Head Attention           │
+│  │   ├── Classical heads            │
+│  │   └── Quantum head (optional)    │
+│  │       └── CNOT Q-K→V circuit     │
 │  ├── LayerNorm                      │
-│  └── Hybrid Feed-Forward            │
-│      └── GELU / Quantum Activation  │
+│  └── Feed-Forward                   │
 └─────────────┬───────────────────────┘
               │
               ▼
@@ -63,98 +87,66 @@ Input Text
 └─────────────────────────────────────┘
 ```
 
-## Quick Start
-
-```bash
-# Clone
-git clone https://github.com/saikrishnajava/quantum-llm-agent.git
-cd quantum-llm-agent
-
-# Setup
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-
-# Run the 12-qubit proof of concept
-python examples/demos/poc_12qubit.py
-
-# Run training on Shakespeare
-python examples/demos/train_gpu.py
-
-# Run MoE training (adaptive qubit routing)
-python examples/demos/train_moe.py
-
-# Run tests
-python -m pytest tests/ -v
-```
-
-## Training
-
-The model trains with real gradient descent through quantum circuits:
-
-```python
-from hybrid.interfaces.model import HybridQuantumLLM
-from classical.optimizers.trainer import HybridQuantumTrainer
-from classical.tokenizer import CharTokenizer
-
-tokenizer = CharTokenizer.from_text("your training text here")
-model = HybridQuantumLLM.from_config("proof_of_concept")
-trainer = HybridQuantumTrainer(model, learning_rate=1e-3)
-
-# Each step computes gradients through quantum circuits
-result = trainer.training_step(input_ids, labels)
-print(f"loss={result['loss']:.4f}, grad_norm={result['grad_norm']:.4f}")
-```
-
-Training speed depends on backend and model:
-
-| Backend | Hardware | Speed | Notes |
-|---------|----------|-------|-------|
-| Fast numpy simulator | Any CPU | ~100ms/step | Default for ≤12 qubits, 14x faster than PennyLane |
-| `lightning.qubit` + adjoint | CPU (C++) | ~200ms/step | Install `pennylane-lightning` |
-| `lightning.gpu` + adjoint | NVIDIA GPU (Volta+) | ~50ms/step | Install `pennylane-lightning[gpu]` |
+---
 
 ## Project Structure
 
 ```
 quantum-llm-agent/
 ├── quantum/              # Quantum circuit components
-│   ├── circuits/core.py  #   Feature map, attention, activation, positional circuits
-│   ├── simulator/        #   Fast numpy statevector simulator (autograd-compatible)
-│   ├── moe/              #   Adaptive qubit router + mixture-of-experts
-│   ├── encodings/        #   Amplitude, angle, basis, variational encoders
-│   ├── gates/layers.py   #   Reusable gate patterns
-│   └── backends/         #   Device management + resource tracking
-├── classical/            # Classical ML components
-│   ├── nn.py             #   Module, Linear, Embedding, LayerNorm, GELU, AdamW, etc.
+│   ├── circuits/core.py  #   Attention, feature map, activation, positional
+│   ├── simulator/        #   Fast numpy statevector simulator
+│   ├── moe/              #   Adaptive qubit router + MoE
+│   └── backends/         #   Device management (GPU auto-selection)
+├── classical/            # Classical ML components (pure NumPy)
+│   ├── nn.py             #   Module, Linear, Embedding, LayerNorm, GELU, AdamW
 │   ├── tokenizer.py      #   Character-level tokenizer
-│   ├── data.py           #   Dataset + DataLoader
 │   └── optimizers/       #   Hybrid quantum-classical trainer
 ├── hybrid/               # Quantum-classical integration
 │   ├── attention/        #   Quantum multi-head attention + MoE attention
 │   ├── embeddings/       #   Hybrid embedding layer
-│   ├── feedforward/      #   Hybrid FFN with quantum activation
+│   ├── feedforward/      #   Hybrid FFN
 │   └── interfaces/       #   Full model, caching, profiling
 ├── agents/               # Agentic workflows
-│   ├── reasoning/        #   Quantum decision + pattern matching
+│   ├── reasoning/        #   Quantum decision + pattern matching circuits
 │   ├── memory/           #   Quantum associative memory
 │   └── coordination/     #   Agent loop + multi-agent coordinator
-├── tests/                # 55 tests (unit, integration, gradient flow, MoE, benchmarks)
-├── config/               # YAML configs for backends, models, training
-└── examples/demos/       # Runnable demos
+├── benchmarks/           # Rigorous benchmarking infrastructure
+│   ├── run_benchmarks.py #   Master script (parallel, resumable, 3-phase)
+│   ├── runner.py         #   Shared training + evaluation infrastructure
+│   ├── analysis/         #   Statistics (CI, t-test, Cohen's d)
+│   └── tasks/            #   6 benchmark tasks (20 variants)
+├── notebooks/            # Colab notebooks
+│   └── quantum_gpu_scaling.ipynb  # GPU qubit scaling experiment
+├── tests/                # 55 tests
+├── config/               # YAML configs
+└── examples/demos/       # Runnable demos + experiments
 ```
 
-## Key Results
+---
 
-| Metric | Value |
-|--------|-------|
-| Quantum circuit types | 6 (feature map, positional, attention, activation, decision, pattern) |
-| Adaptive qubit MoE | Trainable router over 6/9/12 qubit experts |
-| Training | End-to-end gradient flow through quantum circuits |
-| Fast simulator | 14x faster than PennyLane QNode (numpy tensor ops) |
-| Tests | 55 passing |
-| Dependencies | PennyLane + NumPy only |
+## Quick Start
 
-**Current scale:** ~11K params, character-level, trained on Shakespeare. Output is not coherent — this is a proof-of-concept for the architecture, not a production language model.
+```bash
+git clone https://github.com/saikrishnajava/quantum-llm-agent.git
+cd quantum-llm-agent
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+
+# Run tests (55 passing)
+python -m pytest tests/ -v
+
+# Run 12-qubit proof of concept
+python examples/demos/poc_12qubit.py
+
+# Run parity experiment (quantum vs classical)
+python examples/demos/experiment_parity.py
+
+# Run full benchmark suite (parallel, all 20 tasks)
+python benchmarks/run_benchmarks.py --parallel
+```
+
+---
 
 ## Requirements
 
@@ -164,28 +156,16 @@ quantum-llm-agent/
 - SciPy >= 1.11.0
 - PyYAML >= 6.0
 
-Optional for GPU acceleration:
-- NVIDIA GPU with CUDA (compute capability 7.0+ / Volta or newer)
-- `pennylane-lightning[gpu]`
-- Note: Pascal GPUs (P2200, GTX 1080, etc.) are not supported by lightning.gpu — they fall back to lightning.qubit (C++ CPU) automatically
+Optional: `pennylane-lightning[gpu]` for GPU-accelerated simulation (NVIDIA Volta+).
 
-## GPU Setup (NVIDIA)
-
-```bash
-bash setup_gpu.sh
-python examples/demos/train_gpu.py
-```
-
-The training script auto-detects the fastest available backend.
+---
 
 ## Citation
 
-If you use this work in your research, please cite:
-
 ```
-@software{garikipati2026quantum_llm,
+@software{garikipati2026quantum_hybrid_ml,
   author = {Garikipati, Saikrishna},
-  title = {Quantum-Simulated LLM with Agentic Workflows},
+  title = {Quantum-Classical Hybrid ML: Research and Findings},
   year = {2026},
   url = {https://github.com/saikrishnajava/quantum-llm-agent}
 }
@@ -195,14 +175,8 @@ If you use this work in your research, please cite:
 
 Copyright (c) 2026 Saikrishna Garikipati. **All Rights Reserved.**
 
-This software is proprietary. No permission is granted to copy, modify, distribute, or use this software without the prior written consent of the author. See [LICENSE](LICENSE) for full terms.
-
-For licensing inquiries, research collaboration, or commercial use, contact Saikrishna Garikipati.
-
-## Author
-
-**Saikrishna Garikipati**
+See [LICENSE](LICENSE) for full terms.
 
 ---
 
-*This is a research proof-of-concept. It demonstrates that quantum circuits can be integrated into a transformer architecture with end-to-end trainability and adaptive qubit allocation. It does not produce coherent text at current scale — that requires more data, larger models, and more compute. The architecture is designed to be hardware-ready for future quantum computers.*
+*This is a research project demonstrating that quantum circuits can be integrated into ML architectures with end-to-end trainability — and that doing so does not currently provide practical advantage over classical methods at accessible qubit scales. The architecture, training pipeline, and benchmarking infrastructure represent genuine engineering contributions regardless of the advantage finding.*
