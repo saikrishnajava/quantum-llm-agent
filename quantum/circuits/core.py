@@ -165,29 +165,64 @@ class QuantumAttentionCircuit(Module):
       4. Trainable refinement on V-register preserves the Q-K→V structure
       5. Undo Q-K CNOT to reset K for next layer
       6. Measure PauliZ on V-register
+
+    Backend selection:
+      - n_qubits <= 10: fast numpy simulator (CPU, autograd-compatible)
+      - n_qubits > 10: PennyLane QNode (GPU via lightning.gpu if available,
+        else lightning.qubit CPU C++, else default.qubit)
     """
 
-    def __init__(self, n_qubits: int = 6, n_layers: int = 2):
+    GPU_QUBIT_THRESHOLD = 10
+
+    def __init__(self, n_qubits: int = 6, n_layers: int = 2, force_qnode: bool = False):
         assert n_qubits % 3 == 0, "n_qubits must be divisible by 3"
         self.n_qubits = n_qubits
         self.n_layers = n_layers
         self.qubits_per_register = n_qubits // 3
         self.register_dim = 2 ** self.qubits_per_register
+        self.use_qnode = (n_qubits > self.GPU_QUBIT_THRESHOLD) or force_qnode
 
-        self.device = qml.device("default.qubit", wires=n_qubits)
+        self.device = self._select_device(n_qubits)
         self._build_circuit()
 
         qpr = self.qubits_per_register
         n_params = n_layers * (qpr + qpr * 2)
         self.params = Parameter(np.random.randn(n_params) * 0.5)
 
+    @staticmethod
+    def _select_device(n_qubits: int):
+        """Auto-select best available backend based on qubit count."""
+        if n_qubits <= QuantumAttentionCircuit.GPU_QUBIT_THRESHOLD:
+            return qml.device("default.qubit", wires=n_qubits)
+
+        # For >10 qubits, try GPU first, then C++ CPU, then default
+        for backend, kwargs in [
+            ("lightning.gpu", {}),
+            ("lightning.qubit", {}),
+            ("default.qubit", {}),
+        ]:
+            try:
+                dev = qml.device(backend, wires=n_qubits)
+                return dev
+            except Exception:
+                continue
+        return qml.device("default.qubit", wires=n_qubits)
+
+    def _get_diff_method(self):
+        """Select differentiation method based on device."""
+        dev_name = getattr(self.device, 'short_name', '') or getattr(self.device, 'name', '') or str(type(self.device))
+        if 'lightning' in dev_name:
+            return "adjoint"
+        return "backprop"
+
     def _build_circuit(self):
         qpr = self.qubits_per_register
         q_wires = list(range(0, qpr))
         k_wires = list(range(qpr, 2 * qpr))
         v_wires = list(range(2 * qpr, 3 * qpr))
+        diff_method = self._get_diff_method()
 
-        @qml.qnode(self.device, interface="autograd", diff_method="backprop")
+        @qml.qnode(self.device, interface="autograd", diff_method=diff_method)
         def circuit(q_features, k_features, v_features, params):
             qml.AmplitudeEmbedding(q_features, wires=q_wires, normalize=True)
             qml.AmplitudeEmbedding(k_features, wires=k_wires, normalize=True)
@@ -216,6 +251,21 @@ class QuantumAttentionCircuit(Module):
         self._circuit = circuit
 
     def forward(self, q, k, v):
+        if self.use_qnode:
+            return self._forward_qnode(q, k, v)
+        return self._forward_fast_sim(q, k, v)
+
+    def _forward_qnode(self, q, k, v):
+        """Use PennyLane QNode (for >10 qubits or GPU execution)."""
+        dim = self.register_dim
+        q_padded = _pad_to_dim(q, dim)
+        k_padded = _pad_to_dim(k, dim)
+        v_padded = _pad_to_dim(v, dim)
+        result = self._circuit(q_padded, k_padded, v_padded, self.params)
+        return anp.array(result)
+
+    def _forward_fast_sim(self, q, k, v):
+        """Use fast numpy simulator (for ≤10 qubits, CPU)."""
         dim = self.register_dim
         qpr = self.qubits_per_register
         n = self.n_qubits
@@ -234,28 +284,19 @@ class QuantumAttentionCircuit(Module):
 
         idx = 0
         for layer in range(self.n_layers):
-            # Q-K similarity: CNOT(Q,K) → |Q⟩|K⊕Q⟩
             for i in range(qpr):
                 state = apply_cnot(state, q_wires[i], k_wires[i], n)
-
-            # K→V controlled transfer: similarity modulates V
             for i in range(qpr):
                 state = apply_cnot(state, k_wires[i], v_wires[i], n)
                 state = apply_gate(state, _ry(self.params[idx]), v_wires[i], n)
                 state = apply_cnot(state, k_wires[i], v_wires[i], n)
                 idx += 1
-
-            # V refinement (trainable, V-register only)
             for i in range(qpr):
                 state = apply_gate(state, _ry(self.params[idx]), v_wires[i], n)
                 state = apply_gate(state, _rz(self.params[idx + 1]), v_wires[i], n)
                 idx += 2
-
-            # V entanglement
             for i in range(qpr - 1):
                 state = apply_cnot(state, v_wires[i], v_wires[i + 1], n)
-
-            # Reset K register for next layer
             for i in range(qpr):
                 state = apply_cnot(state, q_wires[i], k_wires[i], n)
 
