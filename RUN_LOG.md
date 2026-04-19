@@ -255,3 +255,19 @@ The computational cost of simulating larger quantum circuits on classical CPU ha
 *   **Classical Speed:** The 5 purely classical jobs finished their full 20-epoch training cycles in less than 12 seconds combined.
 *   **Quantum Simulation Wall:** The 9-qubit and 12-qubit models caused massive computational bottlenecks. The 12 parallel workers were fully pinned for nearly an hour (taking ~55+ minutes per 20-epoch quantum run) before the first heavy quantum simulation finished and freed up a slot.
 *   **Takeaway:** This confirms that while scaling the qubits (9q, 12q) might theoretically yield better quantum advantage, it is hitting the absolute limit of what is practically verifiable on local classical simulation hardware.
+
+---
+
+## Run 9: Google Colab 12-Qubit GPU Scaling
+**Date:** April 18, 2026
+**Environment:** Google Colab, Tesla T4 GPU
+**Setup:** `pennylane` v0.44.1, Backend: `lightning.gpu`
+
+### 1. Experiment Setup
+Testing a 12-qubit quantum attention circuit (24 params, `register_dim=16`) on an XOR-sign classification task. The goal was to leverage the Colab GPU (`lightning.gpu`) to bypass the extreme computational wall seen on local CPUs for 12-qubit circuits.
+
+### 2. Execution Observations
+*   **Initialization:** Successfully loaded `lightning.gpu` and verified the 12-qubit forward pass. Data generation for the XOR-sign task (dim=16, 500 samples) succeeded.
+*   **Crash:** The training loop aborted during Step 6 (12-Qubit Experiment) with an Autograd error: `ValueError: setting an array element with a sequence.`
+*   **Root Cause:** The error originates in `loss_fn` at `score = anp.mean(out)`. The `out` variable returned by the quantum circuit appears to be returning an unexpected sequence or nested array (likely due to measuring multiple wires or returning multiple expectation values) that Autograd's `anp.mean()` cannot gracefully cast into a single scalar for gradient tracking.
+*   **Status:** FAILED. The quantum circuit return type—or how the predictions are aggregated—needs to be fixed before 12-qubit GPU scaling can be fully evaluated.
